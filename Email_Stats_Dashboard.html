@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaign Analytics Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:#0a0e1a; --bg2:#0f1526; --bg3:#151c30;
+    --card:#111827; --card2:#1a2236;
+    --border:#1e2d47; --border2:#243350;
+    --accent:#3b82f6; --accent2:#60a5fa; --accent3:#93c5fd;
+    --green:#10b981; --green2:#34d399;
+    --yellow:#f59e0b; --yellow2:#fbbf24;
+    --red:#ef4444; --purple:#8b5cf6; --pink:#ec4899;
+    --text:#f1f5f9; --text2:#94a3b8; --text3:#64748b;
+    --sidebar-w:260px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+  /* SIDEBAR */
+  .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;overflow-y:auto;}
+  .sidebar-logo{padding:24px 20px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .sidebar-logo .logo-tag{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:4px;}
+  .sidebar-logo h2{font-size:18px;font-weight:700;color:var(--text);line-height:1.2;}
+  .sidebar-section{padding:16px 12px 8px;flex-shrink:0;}
+  .sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase;padding:0 8px;margin-bottom:8px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;transition:all 0.2s;font-size:14px;font-weight:500;color:var(--text2);user-select:none;}
+  .nav-item:hover{background:var(--bg3);color:var(--text);}
+  .nav-item.active{background:rgba(59,130,246,0.15);color:var(--accent2);}
+  .nav-item .nav-icon{font-size:16px;width:20px;text-align:center;}
+  .nav-item .nav-arrow{margin-left:auto;font-size:11px;transition:transform 0.2s;color:var(--text3);}
+  .nav-item.expanded .nav-arrow{transform:rotate(90deg);}
+  .nav-sub{overflow:hidden;max-height:0;transition:max-height 0.35s ease;}
+  .nav-sub.open{max-height:400px;}
+  .nav-sub-item{display:flex;align-items:center;gap:8px;padding:7px 12px 7px 42px;cursor:pointer;border-radius:6px;margin:2px 0;font-size:13px;color:var(--text3);transition:all 0.2s;}
+  .nav-sub-item:hover{background:var(--bg3);color:var(--text2);}
+  .nav-sub-item.active{color:var(--accent2);background:rgba(59,130,246,0.1);}
+  .nav-sub-item::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0;}
+
+  /* UPLOAD */
+  .upload-section{margin-top:auto;padding:16px 12px;border-top:1px solid var(--border);flex-shrink:0;}
+  .upload-title{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;padding:0 4px;}
+  .upload-btn{width:100%;padding:10px 14px;border-radius:8px;border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .upload-btn:hover{border-color:var(--accent);color:var(--accent2);background:rgba(59,130,246,0.05);}
+  .upload-btn .upload-icon{font-size:14px;}
+  .upload-btn .upload-label{text-align:left;line-height:1.3;}
+  .upload-btn .upload-label span{display:block;font-size:10px;color:var(--text3);margin-top:1px;}
+
+  /* SUCCESS TOAST */
+  .toast{position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--card2);border:1px solid var(--green);border-radius:12px;padding:14px 18px;display:flex;align-items:flex-start;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:360px;transform:translateY(100px);opacity:0;transition:all 0.35s ease;}
+  .toast.show{transform:translateY(0);opacity:1;}
+  .toast-icon{font-size:20px;flex-shrink:0;}
+  .toast-title{font-size:13px;font-weight:700;color:var(--green2);margin-bottom:3px;}
+  .toast-body{font-size:12px;color:var(--text2);line-height:1.4;}
+
+  /* MAIN */
+  .main{margin-left:var(--sidebar-w);min-height:100vh;display:flex;flex-direction:column;}
+  .topbar{padding:16px 32px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;gap:12px;flex-wrap:wrap;}
+  .topbar-left h1{font-size:20px;font-weight:700;}
+  .topbar-left p{font-size:13px;color:var(--text2);margin-top:2px;}
+  .topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:0.5px;}
+  .badge-blue{background:rgba(59,130,246,0.15);color:var(--accent2);}
+  .badge-green{background:rgba(16,185,129,0.15);color:var(--green2);}
+  .badge-yellow{background:rgba(245,158,11,0.15);color:var(--yellow2);}
+
+  /* DATE FILTER */
+  .date-filter-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .date-filter-wrap label{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;}
+  .date-range-sep{font-size:11px;color:var(--text3);font-weight:600;}
+  .date-input{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:'Space Grotesk',sans-serif;font-size:12px;padding:5px 10px;cursor:pointer;transition:all 0.2s;min-width:130px;width:130px;}
+  .date-input:hover,.date-input:focus{border-color:var(--accent);outline:none;color:var(--text);}
+  .date-apply-btn{background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600;padding:5px 12px;cursor:pointer;transition:all 0.2s;letter-spacing:0.5px;}
+  .date-apply-btn:hover{background:var(--accent2);}
+  .date-clear-btn{background:transparent;border:1px solid var(--border2);border-radius:8px;color:var(--text3);cursor:pointer;font-size:11px;font-weight:600;padding:5px 10px;transition:all 0.2s;}
+  .date-clear-btn:hover{border-color:var(--red);color:var(--red);}
+
+  .content{padding:28px 32px;flex:1;}
+  .section-title{font-size:13px;font-weight:600;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:20px;}
+
+  /* SUMMARY CARDS — 6 cols for overview */
+  .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;}
+  .summary-grid-6{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:28px;}
+  .summary-grid-camp{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:20px;}
+  .sum-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color 0.2s;}
+  .sum-card-sm{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;transition:border-color 0.2s;}
+  .sum-card-sm:hover{border-color:var(--border2);}
+  .sum-card-sm .sum-card-label{font-size:9px;font-weight:600;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:5px;}
+  .sum-card-sm .sum-card-value{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+  .sum-card-sm .sum-card-sub{font-size:9px;color:var(--text3);margin-top:2px;}
+  .sum-card:hover{border-color:var(--border2);}
+  .sum-card-label{font-size:11px;font-weight:600;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;}
+  .sum-card-value{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+  .sum-card-sub{font-size:11px;color:var(--text3);margin-top:4px;}
+  .sum-card-value.blue{color:var(--accent2);}
+  .sum-card-value.green{color:var(--green2);}
+  .sum-card-value.yellow{color:var(--yellow2);}
+  .sum-card-value.purple{color:#a78bfa;}
+  .sum-card-value.pink{color:#f472b6;}
+  .sum-card-value.orange{color:#fb923c;}
+
+  /* JTBD GRID */
+  .jtbd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;}
+  .jtbd-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden;}
+  .jtbd-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;border-radius:3px 0 0 3px;}
+  .jtbd-card.music::before{background:var(--accent);}
+  .jtbd-card.payroll::before{background:var(--green);}
+  .jtbd-card.plumpos::before{background:var(--yellow);}
+  .jtbd-card.accounting::before{background:var(--purple);}
+  .jtbd-card.catering::before{background:var(--pink);}
+  .jtbd-card.scheduling::before{background:#06b6d4;}
+  .jtbd-card.timeclock::before{background:#f97316;}
+  .jtbd-card.inventory::before{background:#84cc16;}
+  .jtbd-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3);}
+  .jtbd-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .jtbd-card-name{font-size:15px;font-weight:600;}
+  .jtbd-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .jtbd-stat-label{font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:3px;}
+  .jtbd-stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+  .jtbd-stat-val.blue{color:var(--accent2);}
+  .jtbd-stat-val.green{color:var(--green2);}
+  .jtbd-stat-val.yellow{color:var(--yellow2);}
+  .jtbd-stat-val.purple{color:#a78bfa;}
+  .jtbd-stat-val.small{font-size:14px;color:var(--text2);}
+  .jtbd-sub-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .jtbd-sub-tag{font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;background:var(--bg3);color:var(--text3);}
+
+  /* DETAIL */
+  .detail-view{display:none;}
+  .detail-view.visible{display:block;}
+  .overview-view.hidden{display:none;}
+  .detail-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;}
+  .back-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'Space Grotesk',sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:6px;}
+  .back-btn:hover{border-color:var(--accent);color:var(--accent2);}
+  .detail-header h2{font-size:22px;font-weight:700;}
+  .detail-header .jtbd-badge{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:1px;}
+  .sub-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;}
+  .sub-tab{padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s;}
+  .sub-tab:hover{border-color:var(--border2);color:var(--text);}
+  .sub-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  /* EMAIL GROUPS */
+  .email-groups{display:flex;flex-direction:column;gap:16px;}
+  .email-group{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .email-group-header{padding:14px 20px;background:var(--card2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .email-group-title{font-size:13px;font-weight:700;letter-spacing:0.5px;color:var(--accent2);}
+  .email-group-summary{display:flex;gap:20px;flex-wrap:wrap;}
+  .eg-stat{font-size:12px;color:var(--text3);}
+  .eg-stat strong{color:var(--text2);font-family:'JetBrains Mono',monospace;}
+  .email-table-wrap{overflow-x:auto;}
+  .email-table{width:100%;border-collapse:collapse;}
+  .email-table th{padding:10px 16px;text-align:left;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .email-table td{padding:11px 16px;font-size:13px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;}
+  .email-table tr:last-child td{border-bottom:none;}
+  .email-table tr:hover td{background:var(--bg3);}
+  .email-table td.name-col{color:var(--text);font-weight:500;max-width:260px;overflow:hidden;text-overflow:ellipsis;}
+  .email-table td.mono{font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .email-table td.highlight-green{color:var(--green2);font-weight:600;font-family:'JetBrains Mono',monospace;}
+  .email-table td.highlight-blue{color:var(--accent2);font-weight:600;font-family:'JetBrains Mono',monospace;}
+  .variant-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.5px;}
+  .v-a{background:rgba(59,130,246,0.2);color:var(--accent2);}
+  .v-b{background:rgba(16,185,129,0.2);color:var(--green2);}
+  .v-c{background:rgba(245,158,11,0.2);color:var(--yellow2);}
+  .v-d{background:rgba(139,92,246,0.2);color:#a78bfa;}
+
+  /* CAMPAIGN TABLE */
+  .camp-table-wrap{overflow-x:auto;}
+  .camp-table{width:100%;border-collapse:collapse;}
+  .camp-table th{padding:10px 16px;text-align:left;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--card2);}
+  .camp-table th.sortable{cursor:pointer;user-select:none;}
+  .camp-table th.sortable:hover{color:var(--accent2);}
+  .camp-table th .sarr{margin-left:4px;opacity:0.4;}
+  .camp-table th.sorted .sarr{opacity:1;color:var(--accent2);}
+  .camp-table td{padding:12px 16px;font-size:13px;color:var(--text2);border-bottom:1px solid var(--border);}
+  .camp-table tr:last-child td{border-bottom:none;}
+  .camp-table tr:hover td{background:var(--bg3);}
+  .camp-table td.tname{color:var(--text);font-weight:500;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .camp-table td.mono{font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .rank-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+  .r1{background:rgba(251,191,36,0.2);color:var(--yellow2);}
+  .r2{background:rgba(148,163,184,0.15);color:#94a3b8;}
+  .r3{background:rgba(180,120,80,0.2);color:#cd8b5c;}
+  .rn{background:var(--bg3);color:var(--text3);}
+  .bar-cell{display:flex;align-items:center;gap:10px;}
+  .bar-wrap{flex:1;height:5px;background:var(--bg3);border-radius:4px;overflow:hidden;min-width:60px;}
+  .bar-fill{height:100%;border-radius:4px;transition:width 0.6s ease;}
+  .bar-num{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;min-width:50px;text-align:right;}
+
+  /* Campaign overview tabs */
+  .camp-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .camp-tab{padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s;}
+  .camp-tab:hover{border-color:var(--border2);color:var(--text);}
+  .camp-tab.active{background:rgba(59,130,246,0.15);border-color:var(--accent);color:var(--accent2);}
+
+  /* No data */
+  .no-data{text-align:center;padding:60px 20px;color:var(--text3);}
+  .no-data-icon{font-size:40px;margin-bottom:12px;}
+  .no-data h3{font-size:16px;color:var(--text2);margin-bottom:6px;}
+  .no-data p{font-size:13px;}
+
+  .progress-bar-wrap{width:100%;background:var(--bg3);border-radius:4px;height:5px;margin-top:6px;overflow:hidden;}
+  .progress-bar-fill{height:100%;border-radius:4px;transition:width 0.6s ease;}
+  .divider{height:1px;background:var(--border);margin:28px 0;}
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-track{background:var(--bg2);}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+
+  /* date filter active indicator */
+  .filter-active-bar{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--yellow2);display:none;align-items:center;gap:8px;margin-bottom:20px;}
+  .filter-active-bar.show{display:flex;}
+
+  /* ── COMPARISON ── */
+  .comparison-view{display:none;}
+  .comparison-view.visible{display:block;}
+  .cmp-wrap{overflow-x:auto;margin-bottom:24px;}
+  .cmp-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .cmp-table th{padding:8px 10px;text-align:center;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:1px solid var(--border);white-space:nowrap;}
+  .cmp-table td{padding:8px 10px;text-align:center;border:1px solid var(--border);white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);}
+  .cmp-table td.email-col{text-align:left;font-weight:700;color:var(--text);font-family:'Space Grotesk',sans-serif;background:var(--card2);min-width:90px;}
+  .cmp-table tr:hover td{background:rgba(255,255,255,0.02);}
+  .cmp-table tr.avg-row td{font-weight:700;color:var(--text);background:var(--card2);border-top:2px solid var(--border2);}
+  .cmp-table tr.avg-row td.email-col{color:var(--accent2);}
+  .th-bombora{background:#1e3a5f;color:#60a5fa;}
+  .th-zoominfo{background:#1a3d2e;color:#34d399;}
+  .th-consideration{background:#2a2010;color:#fbbf24;}
+  .th-awareness{background:#1a2d1a;color:#86efac;}
+  .th-winner{background:#2d1a2d;color:#e879f9;}
+  .th-sub{background:var(--card2);color:var(--text3);font-size:9px;}
+  .winner-bombora{color:#60a5fa;font-weight:700;font-family:'Space Grotesk',sans-serif;font-size:11px;}
+  .winner-zoominfo{color:#34d399;font-weight:700;font-family:'Space Grotesk',sans-serif;font-size:11px;}
+  .winner-consid{color:#fbbf24;font-weight:700;font-family:'Space Grotesk',sans-serif;font-size:11px;}
+  .winner-aware{color:#86efac;font-weight:700;font-family:'Space Grotesk',sans-serif;font-size:11px;}
+  .winner-tie{color:var(--yellow2);font-weight:700;font-size:11px;}
+  .winner-na{color:var(--text3);font-size:11px;}
+  .cell-na{color:var(--text3) !important;font-size:11px;}
+  .cmp-title{font-size:15px;font-weight:700;text-align:center;padding:12px 16px;background:var(--card2);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;letter-spacing:0.3px;}
+  .cmp-title span{color:var(--accent2);}
+  .exec-wrap{overflow-x:auto;margin-bottom:24px;}
+  .exec-table{width:100%;border-collapse:collapse;}
+  .exec-table th{padding:10px 14px;text-align:center;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:1px solid var(--border);background:var(--card2);color:var(--text2);}
+  .exec-table th:first-child,.exec-table th:nth-child(2){text-align:left;}
+  .exec-table td{padding:10px 14px;text-align:center;border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text2);}
+  .exec-table td:first-child{text-align:left;font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--text);font-size:14px;}
+  .exec-table tr:hover td{background:rgba(255,255,255,0.02);}
+  .exec-table td.winner-cell{background:rgba(16,185,129,0.15);color:var(--green2);font-weight:700;}
+  .plat-bombora{background:#1e3a5f;color:#93c5fd;font-weight:700;border-radius:4px;padding:3px 10px;display:inline-block;font-family:'Space Grotesk',sans-serif;font-size:12px;}
+  .plat-zoominfo{background:#1a3d2e;color:#6ee7b7;font-weight:700;border-radius:4px;padding:3px 10px;display:inline-block;font-family:'Space Grotesk',sans-serif;font-size:12px;}
+  .comp-sub-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;}
+  .comp-sub-tab{padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s;}
+  .comp-sub-tab:hover{border-color:var(--border2);color:var(--text);}
+  .comp-sub-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-icon" id="toast-icon">✅</div>
+  <div>
+    <div class="toast-title" id="toast-title">File Uploaded Successfully</div>
+    <div class="toast-body" id="toast-body"></div>
+  </div>
+</div>
+
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-tag">Campaign Analytics</div>
+    <h2>Mautic<br>Dashboard</h2>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Overview</div>
+    <div class="nav-item active" id="nav-overview" onclick="showOverview()">
+      <span class="nav-icon">⚡</span> All Campaigns
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Contact JTBD</div>
+
+    <div class="nav-item" id="nav-music" onclick="toggleNav('music')">
+      <span class="nav-icon">🎵</span> Music <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-music">
+      <div class="nav-sub-item" onclick="showDetail('music','intent')">Intent Analytics</div>
+      <div class="nav-sub-item" onclick="showDetail('music','new')">Contact JTBD</div>
+      <div class="nav-sub-item" onclick="showDetail('music','campaign')">Campaign Topic Stats</div>
+    </div>
+
+    <div class="nav-item" id="nav-payroll" onclick="toggleNav('payroll')">
+      <span class="nav-icon">💰</span> Payroll <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-payroll">
+      <div class="nav-sub-item" onclick="showDetail('payroll','zoominfo')">ZoomInfo Payroll</div>
+      <div class="nav-sub-item" onclick="showDetail('payroll','new')">Contact JTBD</div>
+      <div class="nav-sub-item" onclick="showDetail('payroll','campaign')">Campaign Topic Stats</div>
+    </div>
+
+    <div class="nav-item" id="nav-plumpos" onclick="toggleNav('plumpos')">
+      <span class="nav-icon">🍽️</span> Plum POS <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-plumpos">
+      <div class="nav-sub-item" onclick="showDetail('plumpos','zoominfo')">ZoomInfo Plum POS</div>
+      <div class="nav-sub-item" onclick="showDetail('plumpos','consideration')">Consideration</div>
+      <div class="nav-sub-item" onclick="showDetail('plumpos','awareness')">Awareness</div>
+      <div class="nav-sub-item" onclick="showDetail('plumpos','campaign')">Campaign Topic Stats</div>
+    </div>
+
+    <div class="nav-item" id="nav-accounting" onclick="toggleNav('accounting')">
+      <span class="nav-icon">📊</span> Accounting <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-accounting">
+      <div class="nav-sub-item" onclick="showDetail('accounting','new')">Contact JTBD</div>
+    </div>
+
+    <div class="nav-item" id="nav-catering" onclick="toggleNav('catering')">
+      <span class="nav-icon">🍴</span> Catering <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-catering">
+      <div class="nav-sub-item" onclick="showDetail('catering','new')">Contact JTBD</div>
+    </div>
+
+    <div class="nav-item" id="nav-scheduling" onclick="toggleNav('scheduling')">
+      <span class="nav-icon">📅</span> HR Scheduling <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-scheduling">
+      <div class="nav-sub-item" onclick="showDetail('scheduling','new')">Contact JTBD</div>
+    </div>
+
+    <div class="nav-item" id="nav-timeclock" onclick="toggleNav('timeclock')">
+      <span class="nav-icon">🕐</span> Timeclock <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-timeclock">
+      <div class="nav-sub-item" onclick="showDetail('timeclock','new')">Contact JTBD</div>
+    </div>
+
+    <div class="nav-item" id="nav-inventory" onclick="toggleNav('inventory')">
+      <span class="nav-icon">📦</span> Inventory <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-inventory">
+      <div class="nav-sub-item" onclick="showDetail('inventory','new')">Contact JTBD</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Comparison</div>
+    <div class="nav-item" id="nav-comparison" onclick="toggleNav('comparison')">
+      <span class="nav-icon">⚖️</span> Comparison <span class="nav-arrow">›</span>
+    </div>
+    <div class="nav-sub" id="sub-comparison">
+      <div class="nav-sub-item" onclick="showComparison('payroll')">Payroll Comparison</div>
+      <div class="nav-sub-item" onclick="showComparison('plumpos')">Plum POS Comparison</div>
+      <div class="nav-sub-item" onclick="showComparison('executive')">Executive Summary</div>
+    </div>
+  </div>
+
+  <!-- UPLOAD -->
+  <div class="upload-section">
+    <div class="upload-title">Upload Reports</div>
+    <label class="upload-btn" for="up-all" style="border-color:rgba(59,130,246,0.5);background:rgba(59,130,246,0.05);">
+      <span class="upload-icon">📂</span>
+      <div class="upload-label">Upload Files<span>Select multiple • Auto-detects type & JTBD</span></div>
+    </label>
+    <input type="file" id="up-all" accept=".csv,.xls,.xlsx" multiple style="display:none" onchange="handleSmartUpload(this)">
+    <input type="file" id="up-zoominfo" accept=".csv,.xls,.xlsx" style="display:none" onchange="handleUpload(this,'zoominfo')">
+    <input type="file" id="up-simple"   accept=".csv,.xls,.xlsx" multiple style="display:none" onchange="handleSimpleMultiUpload(this)">
+    <input type="file" id="up-campaign" accept=".csv,.xls,.xlsx" multiple style="display:none" onchange="handleCampaignMultiUpload(this)">
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1 id="page-title">Campaign Overview</h1>
+      <p id="page-sub">All JTBD performance at a glance</p>
+    </div>
+    <div class="topbar-right">
+      <span class="badge badge-blue" id="data-badge">No Data</span>
+      <span class="badge badge-green" id="upload-date-badge">No Upload</span>
+      <div class="date-filter-wrap">
+        <label>Date Range:</label>
+        <input type="date" id="date-from" class="date-input" title="From date" onclick="this.showPicker&&this.showPicker()">
+        <span class="date-range-sep">→</span>
+        <input type="date" id="date-to" class="date-input" title="To date" onclick="this.showPicker&&this.showPicker()">
+        <button class="date-apply-btn" onclick="applyDateRange()">Apply</button>
+        <button class="date-clear-btn" onclick="clearDateFilter()">Clear ✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- OVERVIEW -->
+    <div class="overview-view" id="overview-view">
+
+      <div class="filter-active-bar" id="filter-bar">
+        📅 <span id="filter-bar-text"></span>
+        <button onclick="clearDateFilter()" style="margin-left:auto;background:transparent;border:none;color:var(--yellow2);cursor:pointer;font-size:12px;font-weight:600;">Clear Filter ✕</button>
+      </div>
+
+      <div class="section-title">Overall Summary</div>
+      <div class="summary-grid-6">
+        <div class="sum-card"><div class="sum-card-label">Total Sent</div><div class="sum-card-value blue" id="ov-sent">—</div><div class="sum-card-sub">All campaigns</div></div>
+        <div class="sum-card"><div class="sum-card-label">Total Opens</div><div class="sum-card-value green" id="ov-opens">—</div><div class="sum-card-sub">Unique reads</div></div>
+        <div class="sum-card"><div class="sum-card-label">Total Clicks</div><div class="sum-card-value purple" id="ov-clicks">—</div><div class="sum-card-sub">Unique clicks</div></div>
+        <div class="sum-card"><div class="sum-card-label">Avg Open Rate</div><div class="sum-card-value yellow" id="ov-openrate">—</div><div class="sum-card-sub">Read ratio avg</div></div>
+        <div class="sum-card"><div class="sum-card-label">Avg Click Rate</div><div class="sum-card-value orange" id="ov-clickrate">—</div><div class="sum-card-sub">Click ratio avg</div></div>
+        <div class="sum-card"><div class="sum-card-label">Not Opened</div><div class="sum-card-value pink" id="ov-notopen">—</div><div class="sum-card-sub">Total not opened</div></div>
+      </div>
+
+      <div class="section-title">JTBD Performance</div>
+      <div class="jtbd-grid" id="jtbd-grid"></div>
+
+      <div class="divider"></div>
+      <div class="section-title">Campaign Topic Stats — Top Performers</div>
+      <div class="camp-tabs">
+        <button class="camp-tab active" onclick="switchOvTab('music',this)">🎵 Music</button>
+        <button class="camp-tab" onclick="switchOvTab('payroll',this)">💰 Payroll</button>
+        <button class="camp-tab" onclick="switchOvTab('plumpos',this)">🍽️ Plum POS</button>
+      </div>
+      <div class="email-group" id="ov-camp-wrap">
+        <div class="no-data"><div class="no-data-icon">📊</div><h3>No campaign data</h3><p>Upload a Campaign CSV from the sidebar to see topic rankings.</p></div>
+      </div>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="detail-view" id="detail-view">
+      <div class="detail-header">
+        <button class="back-btn" onclick="showOverview()">← Back</button>
+        <h2 id="detail-title">Music</h2>
+        <span class="jtbd-badge" id="detail-badge" style="background:rgba(59,130,246,0.15);color:var(--accent2)">Intent Analytics</span>
+      </div>
+      <div class="sub-tabs" id="sub-tabs-container"></div>
+
+      <div id="normal-section">
+        <div class="summary-grid-6" id="detail-summary-grid" style="margin-bottom:24px"></div>
+        <div class="section-title">Email-wise Breakdown</div>
+        <div class="email-groups" id="email-groups-container">
+          <div class="no-data"><div class="no-data-icon">📭</div><h3>No data loaded</h3><p>Upload a CSV file using the sidebar to see data here.</p></div>
+        </div>
+      </div>
+
+      <div id="campaign-section" style="display:none">
+        <div class="summary-grid-camp" id="camp-summary-grid" style="margin-bottom:20px"></div>
+        <div class="section-title">Topic-wise Performance — Click any column to sort</div>
+        <div class="email-group" id="camp-detail-wrap">
+          <div class="no-data"><div class="no-data-icon">📊</div><h3>No campaign data</h3><p>Upload the Campaign CSV from the sidebar to see topic rankings.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPARISON VIEW -->
+    <div class="comparison-view" id="comparison-view">
+      <div class="detail-header">
+        <button class="back-btn" onclick="showOverview()">← Back</button>
+        <h2 id="comp-title">Comparison</h2>
+      </div>
+      <div class="comp-sub-tabs" id="comp-sub-tabs">
+        <button class="comp-sub-tab active" onclick="showComparison('payroll')">💰 Payroll</button>
+        <button class="comp-sub-tab" onclick="showComparison('plumpos')">🍽️ Plum POS</button>
+        <button class="comp-sub-tab" onclick="showComparison('executive')">📋 Executive Summary</button>
+      </div>
+      <div id="comp-content"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── STORE ───
+const store = {
+  zoominfo: [],
+  simple: {
+    music:[], payroll:[], plumpos_consideration:[], plumpos_awareness:[],
+    accounting:[], catering:[], scheduling:[], timeclock:[], inventory:[]
+  },
+  campaign: { music:[], payroll:[], plumpos:[] }
+};
+
+let currentOvTab = 'music';
+let currentJTBD = null, currentSub = null;
+let cSortCol = 'uniqueClicks', cSortAsc = false;
+let activeDateFilter = null; // {from:'DD-MM-YYYY', to:'DD-MM-YYYY'} or null
+
+// ─── JTBD CONFIG ───
+const JTBD_CONFIG = {
+  music:      { label:'Music',        icon:'🎵', cls:'music',
+                subs:{ intent:'Intent Analytics', new:'Contact JTBD', campaign:'Campaign Topic Stats' },
+                keywords:{
+                  intent:['music intent analytics','music intent','intent analytics'],
+                  new:['music']
+                }},
+  payroll:    { label:'Payroll',      icon:'💰', cls:'payroll',
+                subs:{ zoominfo:'ZoomInfo Payroll', new:'Contact JTBD', campaign:'Campaign Topic Stats' },
+                keywords:{
+                  zoominfo:['zoominfo | payroll','zoominfo payroll','buying intent'],
+                  new:['payroll']
+                }},
+  plumpos:    { label:'Plum POS',     icon:'🍽️', cls:'plumpos',
+                subs:{ zoominfo:'ZoomInfo Plum POS', consideration:'Consideration', awareness:'Awareness', campaign:'Campaign Topic Stats' },
+                keywords:{
+                  zoominfo:['zoominfo plum','plum | zoominfo','plum zoominfo'],
+                  consideration:['plum pos','25200'],   // Consideration file: 25200-xxxxx | Plum POS
+                  awareness:['point of sale','17500 pos','25201']  // Awareness file: 25201-xxxxx | Point of Sale
+                }},
+  accounting: { label:'Accounting',   icon:'📊', cls:'accounting',
+                subs:{ new:'Contact JTBD' },
+                keywords:{ new:['accounting'] } },
+  catering:   { label:'Catering',     icon:'🍴', cls:'catering',
+                subs:{ new:'Contact JTBD' },
+                keywords:{ new:['catering'] } },
+  scheduling: { label:'HR Scheduling',icon:'📅', cls:'scheduling',
+                subs:{ new:'Contact JTBD' },
+                keywords:{ new:['scheduling','hr scheduling'] } },
+  timeclock:  { label:'Timeclock',    icon:'🕐', cls:'timeclock',
+                subs:{ new:'Contact JTBD' },
+                keywords:{ new:['timeclock'] } },
+  inventory:  { label:'Inventory',    icon:'📦', cls:'inventory',
+                subs:{ new:'Contact JTBD' },
+                keywords:{ new:['inventory'] } }
+};
+
+const SUB_SOURCE = {
+  intent:'zoominfo', zoominfo:'zoominfo',
+  new:'simple', consideration:'simple', awareness:'simple',
+  campaign:'campaign'
+};
+
+// ─── CAMPAIGN AUTO-DETECT ───
+// Detects JTBD from the last pipe-segment of Campaign_name
+// e.g. "... | Email | Payroll" → payroll
+//      "... | Email | Plum"    → plumpos
+//      "... | Email |Music"    → music
+function detectCampaignJTBD(rows) {
+  const counts = { music:0, payroll:0, plumpos:0 };
+  rows.forEach(r => {
+    const n = (r.campaignName || '').toLowerCase();
+    // Get last segment after final pipe
+    const parts = n.split('|');
+    const last = parts[parts.length - 1].trim();
+    if (last.includes('music'))        counts.music++;
+    else if (last.includes('payroll')) counts.payroll++;
+    else if (last.includes('plum'))    counts.plumpos++;
+    else {
+      // Fallback: check full string
+      if (n.includes('music'))         counts.music++;
+      else if (n.includes('payroll'))  counts.payroll++;
+      else if (n.includes('plum'))     counts.plumpos++;
+    }
+  });
+  // Return JTBD with most matches (default 'music' if all zero)
+  const best = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  return best[1] > 0 ? best[0] : 'music';
+}
+
+// ─── CSV PARSER ───
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if(lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());
+  return lines.slice(1).map(line => {
+    const vals = smartSplit(line), obj = {};
+    headers.forEach((h,i) => { obj[h] = (vals[i]||'').trim().replace(/^"|"$/g,''); });
+    return obj;
+  }).filter(r => Object.values(r).some(v=>v!==''));
+}
+function smartSplit(line) {
+  const res=[]; let cur='', inQ=false;
+  for(let c of line){ if(c==='"'){inQ=!inQ;} else if(c===','&&!inQ){res.push(cur);cur='';} else cur+=c; }
+  res.push(cur); return res;
+}
+
+function normalizeRow(r) {
+  const sentCount  = parseNum(r['sent count']  || r['sent_count']);
+  const readCount  = parseNum(r['read count']  || r['read_count']);
+  const readRatio  = parsePct(r['read ratio']  || r['read_ratio']);
+  const uniqueClicks      = parseNum(r['unique clicks']       || r['unique_clicks']);
+  const uniqueClicksRatio = parsePct(r['unique clicks ratio'] || r['unique_clicks_ratio']);
+  // notOpen: use column if present, else derive from sent - read
+  const rawNotOpen = r['email not open count'] || r['not open count'] || r['email not open'] || '';
+  const notOpenCount = rawNotOpen !== '' ? parseNum(rawNotOpen) : Math.max(0, sentCount - readCount);
+  const rawNotOpenRatio = r['email not open count ratio'] || r['not open ratio'] || r['not open count ratio'] || '';
+  const notOpenRatio = rawNotOpenRatio !== '' ? parsePct(rawNotOpenRatio)
+    : (sentCount ? parseFloat(((notOpenCount / sentCount) * 100).toFixed(1)) : 0);
+  return {
+    name: r['name'] || '',
+    id:   r['id']   || '',
+    parentId: r['a/b test parent id'] || r['parent id'] || r['parentid'] || '',
+    sentCount,
+    readCount,
+    readRatio,
+    uniqueClicks,
+    uniqueClicksRatio,
+    notOpenCount,
+    notOpenRatio,
+    sendDate: r['send_date'] || r['sent_date'] || r['sent date'] || r['date'] || ''
+  };
+}
+
+function normalizeCampRow(r) {
+  const campName = r['campaign_name'] || r['name'] || '';
+  const m = campName.match(/=\s*(.+?)\s*\|\s*Email/i);
+  const topicName = m ? m[1].trim() : campName;
+  const row = {
+    campaignName: campName,
+    topicName,
+    totalSent:   parseNum(r['total_sent']   || r['sent count'] || r['sent_count']),
+    uniqueReads: parseNum(r['unique_read_count'] || r['unique read count'] || r['read count']),
+    uniqueClicks:parseNum(r['unique_click_count'] || r['unique_clicks'] || r['unique clicks']),
+    sendDate:    r['send_date'] || r['sent_date'] || r['sent date'] || r['date'] || ''
+  };
+  row.openRate = row.totalSent > 0 ? parseFloat((row.uniqueReads  / row.totalSent * 100).toFixed(1)) : 0;
+  row.clickPct = row.totalSent > 0 ? parseFloat((row.uniqueClicks / row.totalSent * 100).toFixed(1)) : 0;
+  return row;
+}
+
+function parseNum(v){ return parseInt((v||'0').toString().replace(/,/g,''))||0; }
+function parsePct(v){ return parseFloat((v||'0').toString().replace('%',''))||0; }
+
+// ─── FILE → ROWS PARSER (CSV + XLSX) ───
+function parseFileToRows(file, callback) {
+  const isXLSX = /\.(xlsx|xls)$/i.test(file.name);
+  const fr = new FileReader();
+  if (isXLSX) {
+    fr.onload = e => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+
+        // Get raw 2D array first so we can detect if row 0 is a "Query Output" meta row
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (!aoa.length) { callback([]); return; }
+
+        // Check if first row is a meta/title row (e.g. "Query Output : 10 Record(s)")
+        // Real header rows always contain "campaign_name" or "name" or "s no."
+        const firstRowStr = aoa[0].join('|').toLowerCase();
+        const isMetaRow = !firstRowStr.includes('campaign') && !firstRowStr.includes('name') && !firstRowStr.includes('sent');
+
+        // If meta row detected, skip it — use row index 1 as headers
+        const headerRowIdx = isMetaRow ? 1 : 0;
+        const headers = aoa[headerRowIdx].map(h => String(h).toLowerCase().trim());
+
+        // Build row objects from data rows
+        const rows = [];
+        for (let i = headerRowIdx + 1; i < aoa.length; i++) {
+          const rowArr = aoa[i];
+          // Skip completely empty rows
+          if (rowArr.every(v => v === '' || v === null || v === undefined)) continue;
+          const obj = {};
+          headers.forEach((h, ci) => { obj[h] = String(rowArr[ci] ?? '').trim(); });
+          rows.push(obj);
+        }
+        callback(rows);
+      } catch(err) {
+        showToast('❌', 'XLSX Parse Error', err.message);
+      }
+    };
+    fr.readAsArrayBuffer(file);
+  } else {
+    fr.onload = e => { callback(parseCSV(e.target.result)); };
+    fr.readAsText(file);
+  }
+}
+
+// ─── AUTO-DETECT JTBD FROM SIMPLE FILE ───
+function detectSimpleJTBDs(rows) {
+  // Returns which JTBDs are present in the file based on keywords
+  const found = new Set();
+  rows.forEach(r => {
+    const n = r.name.toLowerCase();
+    for (const [jtbd, cfg] of Object.entries(JTBD_CONFIG)) {
+      const kws = cfg.keywords['new'] || [];
+      // Exclude zoominfo-specific rows
+      const ziKws = cfg.keywords['zoominfo'] || [];
+      if (kws.some(k => n.includes(k)) && !ziKws.some(k => n.includes(k))) {
+        found.add(jtbd);
+      }
+    }
+  });
+  return [...found];
+}
+
+// ─── UPLOAD HANDLERS ───
+
+// Smart file type detector: filename pattern has HIGHEST priority
+function detectFileType(filename, headers) {
+  const fn = filename.toLowerCase();
+  const hSet = new Set(headers.map(h => h.toLowerCase().trim()));
+
+  // ── FILENAME patterns first (strongest signal) ──
+  if (fn.includes('zoominfo-email-sent-report') || fn.includes('zoominfo_email_sent_report')) return 'zoominfo';
+  if (fn.includes('query_output') || fn.includes('query-output') || fn.includes('queryoutput')) return 'campaign';
+  // All variant reports and JTBD email reports = simple (Contact JTBD)
+  if (fn.includes('variant-report') || fn.includes('variant_report')) return 'simple';
+  if (fn.includes('jtbd-email-sent-report') || fn.includes('jtbd_email_sent_report')) return 'simple';
+  if (fn.includes('email-sent-report') || fn.includes('email_sent_report')) return 'simple';
+
+  // ── HEADER signals (fallback) ──
+  if (hSet.has('campaign_id') || hSet.has('campaign_name')) return 'campaign';
+  if ((hSet.has('unique clicks ratio') || hSet.has('unique_clicks_ratio')) && hSet.has('sent date')) {
+    return fn.includes('zoominfo') ? 'zoominfo' : 'simple';
+  }
+  if (hSet.has('unique clicks ratio') || hSet.has('unique_clicks_ratio')) return 'zoominfo';
+  if ((hSet.has('sent count')||hSet.has('sent_count')) && (hSet.has('read count')||hSet.has('read_count'))) return 'simple';
+
+  return 'simple';
+}
+
+function handleSmartUpload(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  store.zoominfo = [];
+  Object.keys(store.simple).forEach(k => store.simple[k] = []);
+  Object.keys(store.campaign).forEach(k => store.campaign[k] = []);
+  let totalFiles = files.length;
+  const summary = { zoominfo: 0, campaign: {}, simple: {} };
+  function processNext(idx) {
+    if (idx >= files.length) {
+      let lines = [];
+      if (summary.zoominfo) lines.push(`🔵 <b>ZoomInfo</b>: ${summary.zoominfo} rows`);
+      Object.entries(summary.campaign).forEach(([j,c]) => lines.push(`📊 <b>${JTBD_CONFIG[j]?.label||j} Campaign</b>: ${c} topics`));
+      const simpleLabels = { plumpos_consideration:'🍽️ Plum POS Consideration', plumpos_awareness:'🍽️ Plum POS Awareness' };
+      Object.entries(summary.simple).forEach(([j,c]) => {
+        const lbl = simpleLabels[j] || `${JTBD_CONFIG[j]?.icon||''} ${JTBD_CONFIG[j]?.label||j} Contact JTBD`;
+        lines.push(`📋 <b>${lbl}</b>: ${c} rows`);
+      });
+      showToast('✅', `${totalFiles} file${totalFiles>1?'s':''} uploaded`, lines.join('<br>') || 'No data detected');
+      updateBadges(); refreshAll(); input.value = '';
+      return;
+    }
+    const file = files[idx];
+    parseFileToRows(file, rawRows => {
+      if (!rawRows.length) { processNext(idx + 1); return; }
+      const headers = Object.keys(rawRows[0]);
+      const ftype = detectFileType(file.name, headers);
+      if (ftype === 'zoominfo') {
+        const rows = rawRows.map(normalizeRow);
+        store.zoominfo = store.zoominfo.concat(rows);
+        summary.zoominfo += rows.length;
+      } else if (ftype === 'campaign') {
+        const raw = rawRows.map(normalizeCampRow);
+        const detected = detectCampaignJTBD(raw);
+        store.campaign[detected] = store.campaign[detected].concat(raw);
+        summary.campaign[detected] = (summary.campaign[detected] || 0) + raw.length;
+      } else {
+        // simple / Contact JTBD — route each row by name keywords
+        const rows = rawRows.map(normalizeRow);
+        const fn = file.name.toLowerCase();
+
+        // Detect Plum POS sub-type from filename
+        const isConsideration = fn.includes('consideration');
+        const isAwareness     = fn.includes('awareness') || fn.includes('plum-pos-awareness') || fn.includes('pos-awareness');
+
+        rows.forEach(r => {
+          const n = r.name.toLowerCase();
+
+          // Plum POS Consideration file
+          if (isConsideration) {
+            store.simple['plumpos_consideration'].push(r);
+            summary.simple['plumpos_consideration'] = (summary.simple['plumpos_consideration']||0) + 1;
+            return;
+          }
+          // Plum POS Awareness file
+          if (isAwareness) {
+            store.simple['plumpos_awareness'].push(r);
+            summary.simple['plumpos_awareness'] = (summary.simple['plumpos_awareness']||0) + 1;
+            return;
+          }
+
+          // All other JTBDs — match by keyword
+          for (const [jtbd, cfg] of Object.entries(JTBD_CONFIG)) {
+            if (jtbd === 'plumpos') continue; // plumpos handled above by filename
+            const newKws = cfg.keywords['new'] || [];
+            const ziKws  = cfg.keywords['zoominfo'] || [];
+            if (newKws.some(k => n.includes(k)) && !ziKws.some(k => n.includes(k))) {
+              store.simple[jtbd].push(r);
+              summary.simple[jtbd] = (summary.simple[jtbd]||0) + 1;
+              break;
+            }
+          }
+        });
+      }
+      processNext(idx + 1);
+    });
+  }
+  processNext(0);
+}
+
+// ZoomInfo upload (single file, unchanged)
+function handleUpload(input, type) {
+  const file = input.files[0]; if(!file) return;
+  parseFileToRows(file, rawRows => {
+    const rows = rawRows.map(normalizeRow);
+    store[type] = rows;
+    showToast('✅', 'File Uploaded Successfully', `<b>${file.name}</b><br>${rows.length} rows loaded`);
+    updateBadges(); refreshAll(); input.value='';
+  });
+}
+
+// ─── SIMPLE JTBD — MULTI FILE UPLOAD ───
+// Processes all selected files sequentially, merges into store.simple per JTBD
+function handleSimpleMultiUpload(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+
+  let processed = 0, totalRows = 0;
+  const summary = {}; // jtbd -> count of new rows added
+
+  // Clear existing simple data before loading new batch
+  Object.keys(store.simple).forEach(k => store.simple[k] = []);
+
+  function processNext(idx) {
+    if (idx >= files.length) {
+      // All done — build toast summary
+      const detectedLabels = Object.entries(summary)
+        .filter(([,c]) => c > 0)
+        .map(([j,c]) => `${JTBD_CONFIG[j].icon} <b>${JTBD_CONFIG[j].label}</b>: ${c} rows`)
+        .join('<br>');
+      const body = `${files.length} file${files.length>1?'s':''} processed • ${totalRows} total rows`
+        + (detectedLabels ? `<br><br>${detectedLabels}` : '<br>⚠️ No JTBD keywords matched');
+      showToast('✅', 'Contact JTBD Upload Complete', body);
+      updateBadges(); refreshAll(); input.value = '';
+      return;
+    }
+
+    const file = files[idx];
+    parseFileToRows(file, rawRows => {
+      const rows = rawRows.map(normalizeRow);
+      totalRows += rows.length;
+
+      // Auto-detect JTBD for each row and bucket into store.simple[jtbd]
+      rows.forEach(r => {
+        const n = r.name.toLowerCase();
+        let matched = false;
+        for (const [jtbd, cfg] of Object.entries(JTBD_CONFIG)) {
+          const newKws = cfg.keywords['new'] || [];
+          const ziKws  = cfg.keywords['zoominfo'] || [];
+          // Must match 'new' keywords AND not be a zoominfo row
+          if (newKws.some(k => n.includes(k)) && !ziKws.some(k => n.includes(k))) {
+            store.simple[jtbd].push(r);
+            summary[jtbd] = (summary[jtbd] || 0) + 1;
+            matched = true;
+            break; // first match wins
+          }
+        }
+        // Unmatched rows go to a catch-all (won't display but won't be lost)
+        if (!matched) {
+          summary['_unmatched'] = (summary['_unmatched'] || 0) + 1;
+        }
+      });
+
+      processed++;
+      processNext(idx + 1);
+    });
+  }
+
+  processNext(0);
+}
+
+function handleCampaignUpload(input) {
+  handleCampaignMultiUpload(input); // legacy alias
+}
+
+// ─── CAMPAIGN MULTI-FILE UPLOAD ───
+function handleCampaignMultiUpload(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+
+  let totalRows = 0;
+  const summary = {}; // jtbd -> {label, count}
+
+  // Clear existing campaign data before loading new batch
+  Object.keys(store.campaign).forEach(k => store.campaign[k] = []);
+
+  function processNext(idx) {
+    if (idx >= files.length) {
+      const detectedLabels = Object.entries(summary)
+        .map(([j,{label,count}]) => `${JTBD_CONFIG[j].icon} <b>${label}</b>: ${count} topics`)
+        .join('<br>');
+      const body = `${files.length} file${files.length>1?'s':''} processed • ${totalRows} total rows`
+        + (detectedLabels ? `<br><br>${detectedLabels}` : '<br>⚠️ No JTBD detected');
+      showToast('✅', 'Campaign Upload Complete', body);
+      updateBadges(); refreshAll(); input.value = '';
+      return;
+    }
+    const file = files[idx];
+    parseFileToRows(file, rawRows => {
+      const raw = rawRows.map(normalizeCampRow);
+      if (!raw.length) { processNext(idx + 1); return; }
+      totalRows += raw.length;
+      const detected = detectCampaignJTBD(raw);
+      store.campaign[detected] = store.campaign[detected].concat(raw);
+      const label = JTBD_CONFIG[detected].label;
+      if (!summary[detected]) summary[detected] = { label, count: 0 };
+      summary[detected].count += raw.length;
+      processNext(idx + 1);
+    });
+  }
+
+  processNext(0);
+}
+
+// ─── TOAST ───
+let toastTimer = null;
+function showToast(icon, title, body) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-icon').textContent = icon;
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-body').innerHTML = body;
+  t.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 5000);
+}
+
+// ─── BADGES ───
+function updateBadges() {
+  const simpleTotal = Object.values(store.simple).reduce((a,b)=>a+b.length,0);
+  const t = store.zoominfo.length + simpleTotal +
+    store.campaign.music.length + store.campaign.payroll.length + store.campaign.plumpos.length;
+  document.getElementById('data-badge').textContent = t ? `${t} Records` : 'No Data';
+  document.getElementById('upload-date-badge').textContent =
+    'Uploaded: ' + new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+// ─── DATE RANGE FILTER ───
+
+// Parse DD-MM-YYYY string -> Date object (midnight)
+function parseDateDMY(str) {
+  if(!str) return null;
+  // Input from <input type=date> is YYYY-MM-DD
+  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(iso) return new Date(+iso[1], +iso[2]-1, +iso[3]);
+  // CSV sendDate is DD-MM-YYYY or DD/MM/YYYY
+  const dmy = str.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if(dmy) return new Date(+dmy[3], +dmy[2]-1, +dmy[1]);
+  return null;
+}
+
+function applyDateRange() {
+  const from = document.getElementById('date-from').value;
+  const to   = document.getElementById('date-to').value;
+  if(!from && !to) { clearDateFilter(); return; }
+  if(from && to && from > to) {
+    showToast('⚠️', 'Invalid Range', 'From date must be before or equal to To date.');
+    return;
+  }
+  activeDateFilter = { from: from || null, to: to || null };
+  updateFilterBar();
+  refreshAll();
+}
+
+function clearDateFilter() {
+  activeDateFilter = null;
+  document.getElementById('date-from').value = '';
+  document.getElementById('date-to').value = '';
+  updateFilterBar();
+  refreshAll();
+}
+
+function updateFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  if(activeDateFilter) {
+    bar.classList.add('show');
+    const f = activeDateFilter.from ? formatSendDate(activeDateFilter.from) : 'Start';
+    const t = activeDateFilter.to   ? formatSendDate(activeDateFilter.to)   : 'End';
+    document.getElementById('filter-bar-text').textContent = `Showing emails from ${f} → ${t}`;
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+function filterByDate(rows) {
+  if(!activeDateFilter) return rows;
+  const { from, to } = activeDateFilter;
+  const fromD = parseDateDMY(from);
+  const toD   = parseDateDMY(to);
+  return rows.filter(r => {
+    if(!r.sendDate || !r.sendDate.trim()) return false;
+    const d = parseDateDMY(r.sendDate);
+    if(!d) return false;
+    if(fromD && d < fromD) return false;
+    if(toD   && d > toD)   return false;
+    return true;
+  });
+}
+
+// ─── HELPERS ───
+function getRows(jtbd, sub) {
+  if(sub==='campaign') return filterByDate(store.campaign[jtbd]||[]);
+  if(sub==='new') return filterByDate(store.simple[jtbd]||[]);
+  // Plum POS sub-sections stored separately
+  if(sub==='consideration') return filterByDate(store.simple['plumpos_consideration']||[]);
+  if(sub==='awareness')     return filterByDate(store.simple['plumpos_awareness']||[]);
+  // For zoominfo/intent — pull from store.zoominfo and filter by keywords
+  const rows = store.zoominfo;
+  const kws = JTBD_CONFIG[jtbd].keywords[sub]||[];
+  const filtered = rows.filter(r => {
+    const n = r.name.toLowerCase();
+    return kws.some(k => n.includes(k));
+  });
+  return filterByDate(filtered);
+}
+function getAllRowsForJTBD(jtbd) {
+  let all=[];
+  for(const sub of Object.keys(JTBD_CONFIG[jtbd].subs)){ if(sub!=='campaign') all=all.concat(getRows(jtbd,sub)); }
+  return all;
+}
+function computeStats(rows) {
+  if(!rows.length) return {sent:0,opens:0,clicks:0,notOpen:0,openRate:0,clickRate:0};
+  const sent = rows.reduce((s,r)=>s+r.sentCount,0);
+  const opens = rows.reduce((s,r)=>s+r.readCount,0);
+  const clicks = rows.reduce((s,r)=>s+r.uniqueClicks,0);
+  const notOpen = rows.reduce((s,r)=>s+r.notOpenCount,0);
+  const openRate = sent?(opens/sent*100).toFixed(2):0;
+  const clickRate = (rows.reduce((s,r)=>s+r.uniqueClicksRatio,0)/rows.length).toFixed(2);
+  return {sent,opens,clicks,notOpen,openRate,clickRate};
+}
+function extractSeqNum(name) {
+  // Matches: "25202-00001", "001 B", "001 C", "002 D" etc.
+  // Priority: last 3-digit block before optional variant letter
+  // "25202-00001 | ZoomInfo | Payroll | EMM"  → "001"
+  // "17500 ZoomInfo Payroll 001 B"            → "001"
+  // "17500 ZoomInfo Payroll 002 C"            → "002"
+  // Handles both "-00001" (5-digit with leading zeros) and "001" (3-digit)
+  const m = name.match(/[-\s]0*(\d{1,3})(?:\s+[A-D])?(?:\s*[\|$]|$)/);
+  if (m) return m[1].padStart(3, '0');
+  // fallback: just find any 3-digit number
+  const m2 = name.match(/\b(\d{3})\b/);
+  return m2 ? m2[1] : name;
+}
+
+function groupEmails(rows) {
+  // Strategy 1: use parentId if available
+  const hasParentIds = rows.some(r => r.parentId);
+  if (hasParentIds) {
+    const g={};
+    rows.forEach(r=>{ const k=r.parentId?r.parentId:r.id; if(!g[k])g[k]={parent:null,children:[]}; if(!r.parentId)g[k].parent=r; else g[k].children.push(r); });
+    rows.forEach(r=>{ if(!r.parentId){ const k=r.id; if(!g[k])g[k]={parent:r,children:[]}; else if(!g[k].parent)g[k].parent=r; }});
+    return Object.entries(g).filter(([,v])=>v.parent).sort((a,b)=>a[0].localeCompare(b[0]));
+  }
+
+  // Strategy 2: Group by sequence number (001, 002...) extracted from name
+  // "25202-00001 | ZoomInfo | Payroll | EMM" and "17500 ZoomInfo Payroll 001 B/C/D"
+  // all share seq "001" → go in same group
+  const variantSuffixRe = /\s+([A-D])$/;
+  const groups = {}; // key = seqNum
+
+  rows.forEach(r => {
+    const isVariant = variantSuffixRe.test(r.name);
+    const seq = extractSeqNum(r.name);
+    if (!groups[seq]) groups[seq] = { parent: null, children: [] };
+    if (!isVariant) {
+      // No B/C/D suffix → this is the "A" / parent row
+      groups[seq].parent = r;
+    } else {
+      groups[seq].children.push(r);
+    }
+  });
+
+  // Sort children alphabetically by name (B before C before D)
+  for (const g of Object.values(groups)) {
+    g.children.sort((a, b) => a.name.localeCompare(b.name));
+    // If no parent found, promote first child
+    if (!g.parent && g.children.length) {
+      g.parent = g.children.shift();
+    }
+  }
+
+  // Sort groups by seq number ascending (001, 002, 003...)
+  return Object.entries(groups)
+    .filter(([,v]) => v.parent)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+}
+function emailNum(name) {
+  // Pattern 1: 25207-00001 | ... -> Email 001
+  let m = name.match(/-0*(\d{1,4})(?:\s*\||\s*$)/);
+  if (m) return `Email ${m[1].padStart(3,'0')}`;
+  // Pattern 2: 17500 Music 001 B -> 3-digit starting with 0
+  m = name.match(/\b(0\d{2})\b/);
+  if (m) return `Email ${m[1]}`;
+  // Fallback: any 3-digit block
+  m = name.match(/\b(\d{3})\b/);
+  return m ? `Email ${m[1]}` : name;
+}
+
+function formatSendDate(dateStr) {
+  if(!dateStr) return null;
+  const s = dateStr.trim();
+  // DD-MM-YYYY or DD/MM/YYYY — always treat as day first
+  const dmY = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if(dmY) {
+    const d = new Date(+dmY[3], +dmY[2]-1, +dmY[1]);
+    if(!isNaN(d.getTime())) return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  }
+  // YYYY-MM-DD (ISO format)
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(iso) {
+    const d = new Date(+iso[1], +iso[2]-1, +iso[3]);
+    if(!isNaN(d.getTime())) return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  }
+  return s;
+}
+
+function emailLabel(groupRows) {
+  const name = groupRows[0]?.name || '';
+  const label = emailNum(name);
+  // Pick first non-empty sendDate from any row in the group
+  const dateStr = groupRows.map(r => r?.sendDate).find(d => d && d.trim());
+  const fmt = dateStr ? formatSendDate(dateStr) : null;
+  return fmt
+    ? `${label}<span style="font-weight:500;color:var(--yellow2);font-size:11px;margin-left:10px;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:4px;">📅 ${fmt}</span>`
+    : label;
+}
+
+// ─── CAMPAIGN TABLE ───
+function renderCampTable(jtbd, containerId, sortCol, sortAsc) {
+  // Campaign CSV has no sendDate - never filter by date range
+  const filtered = [...(store.campaign[jtbd]||[])];
+  const el = document.getElementById(containerId);
+  if(!filtered.length){
+    el.innerHTML=`<div class="no-data"><div class="no-data-icon">📊</div><h3>No campaign data</h3><p>Upload files using the Upload button. Campaign files auto-detect ${JTBD_CONFIG[jtbd].label}.</p></div>`; return;
+  }
+  filtered.sort((a,b)=>{ const av=a[sortCol]||0,bv=b[sortCol]||0; return sortAsc?av-bv:bv-av; });
+  const maxC=Math.max(...filtered.map(r=>r.uniqueClicks),1), maxR=Math.max(...filtered.map(r=>r.uniqueReads),1);
+  const arr=(col)=>col!==sortCol?'<span class="sarr">↕</span>':`<span class="sarr">${sortAsc?'↑':'↓'}</span>`;
+  const thc=(col)=>`sortable${col===sortCol?' sorted':''}`;
+  let h=`<div class="camp-table-wrap"><table class="camp-table"><thead><tr>
+    <th style="width:40px">#</th><th>Topic Name</th>
+    <th class="${thc('totalSent')}" onclick="sortCamp('${jtbd}','totalSent','${containerId}')">Total Sent ${arr('totalSent')}</th>
+    <th class="${thc('uniqueReads')}" onclick="sortCamp('${jtbd}','uniqueReads','${containerId}')">Unique Reads ${arr('uniqueReads')}</th>
+    <th class="${thc('openRate')}" onclick="sortCamp('${jtbd}','openRate','${containerId}')">Avg Open Rate ${arr('openRate')}</th>
+    <th class="${thc('uniqueClicks')}" onclick="sortCamp('${jtbd}','uniqueClicks','${containerId}')">Unique Clicks ${arr('uniqueClicks')}</th>
+    <th class="${thc('clickPct')}" onclick="sortCamp('${jtbd}','clickPct','${containerId}')">Avg Click Rate ${arr('clickPct')}</th>
+  </tr></thead><tbody>`;
+  filtered.forEach((r,i)=>{
+    const rc=i===0?'r1':i===1?'r2':i===2?'r3':'rn';
+    const cp=((r.uniqueClicks/maxC)*100).toFixed(1), rp=((r.uniqueReads/maxR)*100).toFixed(1);
+    const openRate = r.openRate !== undefined ? r.openRate : (r.totalSent>0?(r.uniqueReads/r.totalSent*100).toFixed(1):'0.0');
+    const clickPct = r.clickPct !== undefined ? r.clickPct : (r.totalSent>0?(r.uniqueClicks/r.totalSent*100).toFixed(1):'0.0');
+    const openColor = parseFloat(openRate)>=30?'var(--green2)':parseFloat(openRate)>=15?'var(--yellow2)':'var(--text3)';
+    const pctColor  = parseFloat(clickPct)>=10?'var(--green2)':parseFloat(clickPct)>=5?'var(--yellow2)':'var(--text3)';
+    h+=`<tr>
+      <td><span class="rank-badge ${rc}">${i+1}</span></td>
+      <td class="tname" title="${r.topicName}">${r.topicName}</td>
+      <td class="mono">${r.totalSent.toLocaleString()}</td>
+      <td><div class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${rp}%;background:var(--green)"></div></div><span class="bar-num" style="color:var(--green2)">${r.uniqueReads.toLocaleString()}</span></div></td>
+      <td class="mono" style="font-weight:700;color:${openColor}">${openRate}%</td>
+      <td><div class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${cp}%;background:var(--accent)"></div></div><span class="bar-num" style="color:var(--accent2)">${r.uniqueClicks.toLocaleString()}</span></div></td>
+      <td class="mono" style="font-weight:700;color:${pctColor}">${clickPct}%</td>
+    </tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  el.innerHTML=h;
+}
+function sortCamp(jtbd,col,containerId){
+  if(cSortCol===col) cSortAsc=!cSortAsc; else{cSortCol=col;cSortAsc=false;}
+  renderCampTable(jtbd,containerId,cSortCol,cSortAsc);
+}
+function switchOvTab(jtbd,btn){
+  currentOvTab=jtbd;
+  document.querySelectorAll('.camp-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCampTable(jtbd,'ov-camp-wrap','uniqueClicks',false);
+}
+
+// ─── NAV ───
+function toggleNav(jtbd){
+  const sub=document.getElementById(`sub-${jtbd}`),ni=document.getElementById(`nav-${jtbd}`),open=sub.classList.contains('open');
+  document.querySelectorAll('.nav-sub').forEach(e=>e.classList.remove('open'));
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('expanded'));
+  if(!open){sub.classList.add('open');ni.classList.add('expanded');}
+}
+
+// ─── REFRESH ───
+function refreshAll(){
+  renderOvSummary(); renderJTBDGrid();
+  renderCampTable(currentOvTab,'ov-camp-wrap','uniqueClicks',false);
+  if(currentJTBD&&currentSub) renderDetail(currentJTBD,currentSub);
+}
+
+// ─── OVERVIEW SUMMARY (6 cards) ───
+function renderOvSummary(){
+  let all=[];
+  for(const j of Object.keys(JTBD_CONFIG)) all=all.concat(getAllRowsForJTBD(j));
+  const s=computeStats(all);
+  document.getElementById('ov-sent').textContent      = s.sent?s.sent.toLocaleString():'—';
+  document.getElementById('ov-opens').textContent     = s.opens?s.opens.toLocaleString():'—';
+  document.getElementById('ov-clicks').textContent    = s.clicks?s.clicks.toLocaleString():'—';
+  document.getElementById('ov-openrate').textContent  = s.sent?s.openRate+'%':'—';
+  document.getElementById('ov-clickrate').textContent = s.sent?s.clickRate+'%':'—';
+  document.getElementById('ov-notopen').textContent   = s.notOpen?s.notOpen.toLocaleString():'—';
+}
+
+// ─── JTBD GRID (4 stats each) ───
+function renderJTBDGrid(){
+  const grid=document.getElementById('jtbd-grid'); grid.innerHTML='';
+  for(const [key,cfg] of Object.entries(JTBD_CONFIG)){
+    const rows=getAllRowsForJTBD(key), s=computeStats(rows);
+    const camp=filterByDate(store.campaign[key]||[]);
+    const campClicks=camp.reduce((a,r)=>a+r.uniqueClicks,0);
+    const hd=rows.length>0, hc=camp.length>0;
+    const tags=Object.values(cfg.subs).map(t=>`<span class="jtbd-sub-tag">${t}</span>`).join('');
+    grid.innerHTML+=`<div class="jtbd-card ${cfg.cls}" onclick="showDetail('${key}','${Object.keys(cfg.subs)[0]}')">
+      <div class="jtbd-card-header"><div class="jtbd-card-name">${cfg.icon} ${cfg.label}</div><div style="font-size:11px;color:var(--text3)">${rows.length} rows</div></div>
+      <div class="jtbd-stats">
+        <div class="jtbd-stat-item"><div class="jtbd-stat-label">Total Sent</div><div class="jtbd-stat-val blue">${hd?s.sent.toLocaleString():'—'}</div></div>
+        <div class="jtbd-stat-item"><div class="jtbd-stat-label">Total Opens</div><div class="jtbd-stat-val green">${hd?s.opens.toLocaleString():'—'}</div></div>
+        <div class="jtbd-stat-item"><div class="jtbd-stat-label">Total Clicks</div><div class="jtbd-stat-val purple">${hd?s.clicks.toLocaleString():'—'}</div></div>
+        <div class="jtbd-stat-item"><div class="jtbd-stat-label">Camp. Clicks</div><div class="jtbd-stat-val yellow">${hc?campClicks.toLocaleString():'—'}</div></div>
+      </div>
+      <div class="jtbd-sub-tags">${tags}</div>
+    </div>`;
+  }
+}
+
+// ─── SHOW OVERVIEW ───
+function showOverview(){
+  currentJTBD=null; currentSub=null;
+  document.getElementById('overview-view').classList.remove('hidden');
+  document.getElementById('detail-view').classList.remove('visible');
+  document.getElementById('page-title').textContent='Campaign Overview';
+  document.getElementById('page-sub').textContent='All JTBD performance at a glance';
+  document.getElementById('nav-overview').classList.add('active');
+  document.querySelectorAll('.nav-sub-item').forEach(e=>e.classList.remove('active'));
+  renderOvSummary(); renderJTBDGrid();
+  renderCampTable(currentOvTab,'ov-camp-wrap','uniqueClicks',false);
+}
+
+// ─── SHOW DETAIL ───
+function showDetail(jtbd,sub){
+  currentJTBD=jtbd; currentSub=sub;
+  document.getElementById('overview-view').classList.add('hidden');
+  document.getElementById('detail-view').classList.add('visible');
+  document.getElementById('nav-overview').classList.remove('active');
+  const ns=document.getElementById(`sub-${jtbd}`),ni=document.getElementById(`nav-${jtbd}`);
+  document.querySelectorAll('.nav-sub').forEach(e=>e.classList.remove('open'));
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('expanded','active'));
+  ns.classList.add('open'); ni.classList.add('expanded','active');
+  document.querySelectorAll('.nav-sub-item').forEach(e=>{
+    e.classList.remove('active');
+    if(e.getAttribute('onclick')===`showDetail('${jtbd}','${sub}')`) e.classList.add('active');
+  });
+  renderDetail(jtbd,sub);
+}
+
+// ─── RENDER DETAIL ───
+function renderDetail(jtbd,sub){
+  const cfg=JTBD_CONFIG[jtbd], lbl=cfg.subs[sub], isCamp=sub==='campaign';
+  document.getElementById('page-title').textContent=`${cfg.icon} ${cfg.label}`;
+  document.getElementById('page-sub').textContent=lbl;
+  document.getElementById('detail-title').textContent=`${cfg.icon} ${cfg.label}`;
+  document.getElementById('detail-badge').textContent=lbl;
+
+  const tc=document.getElementById('sub-tabs-container'); tc.innerHTML='';
+  for(const [k,v] of Object.entries(cfg.subs)){
+    const b=document.createElement('button');
+    b.className='sub-tab'+(k===sub?' active':'');
+    b.textContent=v; b.onclick=()=>showDetail(jtbd,k);
+    tc.appendChild(b);
+  }
+
+  document.getElementById('normal-section').style.display=isCamp?'none':'block';
+  document.getElementById('campaign-section').style.display=isCamp?'block':'none';
+
+  if(isCamp){
+    // Campaign CSV has no sendDate - never apply date filter
+    const cr=[...(store.campaign[jtbd]||[])];
+    const hc=cr.length>0;
+    const cs={
+      topics:cr.length,
+      totalSent:cr.reduce((a,r)=>a+r.totalSent,0),
+      uniqueReads:cr.reduce((a,r)=>a+r.uniqueReads,0),
+      uniqueClicks:cr.reduce((a,r)=>a+r.uniqueClicks,0)
+    };
+    const notOpened=Math.max(0,cs.totalSent-cs.uniqueReads);
+    const avgOpenRate=cs.totalSent>0?(cs.uniqueReads/cs.totalSent*100).toFixed(1):'0.0';
+    const avgClickRate=cs.totalSent>0?(cs.uniqueClicks/cs.totalSent*100).toFixed(1):'0.0';
+    const top3=hc?[...cr].filter(r=>r.uniqueClicks>0).sort((a,b)=>b.uniqueClicks-a.uniqueClicks).slice(0,3):[];
+    const medals=['🥇','🥈','🥉'];
+    const top3Html=top3.length?top3.map((r,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:18px;flex-shrink:0">${medals[i]}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.topicName}">${r.topicName}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Reads: <b style='color:var(--green2)'>${r.uniqueReads.toLocaleString()}</b></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent2);">${r.uniqueClicks.toLocaleString()}</div>
+          <div style="font-size:10px;color:var(--text3);">clicks</div>
+        </div>
+      </div>`).join(''):'<div style="color:var(--text3);font-size:12px;padding:8px 0">No clicks data yet</div>';
+    document.getElementById('camp-summary-grid').innerHTML=`
+      <div class="sum-card-sm"><div class="sum-card-label">Total Topics</div><div class="sum-card-value blue">${hc?cs.topics:'—'}</div><div class="sum-card-sub">Campaigns</div></div>
+      <div class="sum-card-sm"><div class="sum-card-label">Total Sent</div><div class="sum-card-value green">${hc?cs.totalSent.toLocaleString():'—'}</div><div class="sum-card-sub">All topics</div></div>
+      <div class="sum-card-sm"><div class="sum-card-label">Unique Reads</div><div class="sum-card-value yellow">${hc?cs.uniqueReads.toLocaleString():'—'}</div><div class="sum-card-sub">Total reads</div></div>
+      <div class="sum-card-sm"><div class="sum-card-label">Unique Clicks</div><div class="sum-card-value purple">${hc?cs.uniqueClicks.toLocaleString():'—'}</div><div class="sum-card-sub">Total clicks</div></div>
+      <div class="sum-card-sm"><div class="sum-card-label">Not Opened</div><div class="sum-card-value pink">${hc?notOpened.toLocaleString():'—'}</div><div class="sum-card-sub">Sent − reads</div></div>
+      <div class="sum-card-sm"><div class="sum-card-label">Avg Open Rate</div><div class="sum-card-value orange">${hc?avgOpenRate+'%':'—'}</div><div class="sum-card-sub">Reads/Sent</div></div>
+      <div class="sum-card-sm"><div class="sum-card-label">Avg Click Rate</div><div class="sum-card-value" style="color:#fb923c">${hc?avgClickRate+'%':'—'}</div><div class="sum-card-sub">Clicks/Sent</div></div>
+      <div class="sum-card-sm" style="grid-column:span 7;border-color:rgba(59,130,246,0.3);">
+        <div class="sum-card-label" style="margin-bottom:12px">🏆 Top 3 Topics by Unique Clicks</div>
+        ${top3Html}
+      </div>
+    `;
+    cSortCol='uniqueClicks'; cSortAsc=false;
+    renderCampTable(jtbd,'camp-detail-wrap',cSortCol,cSortAsc);
+    return;
+  }
+
+  const rows=getRows(jtbd,sub), s=computeStats(rows);
+  document.getElementById('detail-summary-grid').innerHTML=`
+    <div class="sum-card"><div class="sum-card-label">Total Sent</div><div class="sum-card-value blue">${rows.length?s.sent.toLocaleString():'—'}</div><div class="sum-card-sub">Emails sent</div></div>
+    <div class="sum-card"><div class="sum-card-label">Total Opens</div><div class="sum-card-value green">${rows.length?s.opens.toLocaleString():'—'}</div><div class="sum-card-sub">Unique reads</div></div>
+    <div class="sum-card"><div class="sum-card-label">Total Clicks</div><div class="sum-card-value purple">${rows.length?s.clicks.toLocaleString():'—'}</div><div class="sum-card-sub">Unique clicks</div></div>
+    <div class="sum-card"><div class="sum-card-label">Not Opened</div><div class="sum-card-value pink">${rows.length?s.notOpen.toLocaleString():'—'}</div><div class="sum-card-sub">Not opened count</div></div>
+    <div class="sum-card"><div class="sum-card-label">Avg Open Rate</div><div class="sum-card-value yellow">${rows.length?s.openRate+'%':'—'}</div><div class="sum-card-sub">Read ratio avg</div></div>
+    <div class="sum-card"><div class="sum-card-label">Avg Click Rate</div><div class="sum-card-value orange">${rows.length?s.clickRate+'%':'—'}</div><div class="sum-card-sub">Click ratio avg</div></div>`;
+
+  const cont=document.getElementById('email-groups-container');
+  if(!rows.length){
+    cont.innerHTML=`<div class="no-data"><div class="no-data-icon">📭</div><h3>No data loaded</h3><p>Upload the ${SUB_SOURCE[sub]==='zoominfo'?'ZoomInfo / Intent Analytics':'Contact JTBD'} CSV to see data.</p></div>`; return;
+  }
+
+  const groups=groupEmails(rows); let html='';
+  groups.forEach(([,g])=>{
+    const all=[g.parent,...g.children].filter(Boolean), gs=computeStats(all), lbl=emailLabel(all);
+    html+=`<div class="email-group">
+      <div class="email-group-header">
+        <div class="email-group-title">${lbl}</div>
+        <div class="email-group-summary">
+          <div class="eg-stat">Sent: <strong>${gs.sent.toLocaleString()}</strong></div>
+          <div class="eg-stat">Opens: <strong>${gs.opens.toLocaleString()}</strong></div>
+          <div class="eg-stat">Clicks: <strong>${gs.clicks.toLocaleString()}</strong></div>
+          <div class="eg-stat">Open Rate: <strong>${gs.openRate}%</strong></div>
+          <div class="eg-stat">Click Rate: <strong>${gs.clickRate}%</strong></div>
+        </div>
+      </div>
+      <div class="email-table-wrap"><table class="email-table">
+        <thead><tr><th>Variant</th><th>Name</th><th>Sent</th><th>Read Count</th><th>Read Ratio</th><th>Unique Clicks</th><th>Click Ratio</th><th>Not Open</th><th>Not Open %</th></tr></thead>
+        <tbody>`;
+    all.forEach((r,i)=>{
+      const v=i===0?'A':String.fromCharCode(65+i), vc=['v-a','v-b','v-c','v-d'][i]||'v-a';
+      html+=`<tr ${!r.parentId?'style="background:rgba(255,255,255,0.02)"':''}>
+        <td><span class="variant-badge ${vc}">${v}</span></td>
+        <td class="name-col">${r.name}</td>
+        <td class="mono">${r.sentCount.toLocaleString()}</td>
+        <td class="mono">${r.readCount.toLocaleString()}</td>
+        <td class="highlight-green">${r.readRatio}%<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${Math.min(r.readRatio,100)}%;background:var(--green)"></div></div></td>
+        <td class="mono">${r.uniqueClicks.toLocaleString()}</td>
+        <td class="highlight-blue">${r.uniqueClicksRatio}%<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${Math.min(r.uniqueClicksRatio,100)}%;background:var(--accent)"></div></div></td>
+        <td class="mono">${r.notOpenCount.toLocaleString()}</td>
+        <td class="mono">${r.notOpenRatio}%</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div></div>`;
+  });
+  cont.innerHTML=html;
+}
+
+// ─── COMPARISON ───
+let currentCompTab = 'payroll';
+
+function showComparison(tab) {
+  currentCompTab = tab;
+  // Hide other views, show comparison
+  document.getElementById('overview-view').classList.add('hidden');
+  document.getElementById('detail-view').classList.remove('visible');
+  document.getElementById('comparison-view').classList.add('visible');
+  document.getElementById('nav-overview').classList.remove('active');
+  // Mark sidebar nav active
+  document.querySelectorAll('.nav-sub-item').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.nav-sub-item').forEach(e => {
+    if (e.getAttribute('onclick') === `showComparison('${tab}')`) e.classList.add('active');
+  });
+  const ns = document.getElementById('sub-comparison');
+  const ni = document.getElementById('nav-comparison');
+  document.querySelectorAll('.nav-sub').forEach(e => e.classList.remove('open'));
+  document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('expanded','active'));
+  ns.classList.add('open'); ni.classList.add('expanded','active');
+  // Topbar
+  const labels = { payroll:'Payroll Comparison', plumpos:'Plum POS Comparison', executive:'Executive Summary' };
+  document.getElementById('page-title').textContent = labels[tab] || 'Comparison';
+  document.getElementById('page-sub').textContent = 'Bombora vs ZoomInfo — Email-by-Email Performance';
+  // Update sub-tabs
+  document.querySelectorAll('#comp-sub-tabs .comp-sub-tab').forEach((b,i) => {
+    b.classList.toggle('active', ['payroll','plumpos','executive'][i] === tab);
+  });
+  renderComparison(tab);
+}
+
+// Build combined email groups from rows — all variants merged into one row per email
+function buildCompGroups(rows) {
+  const groups = groupEmails(rows);
+  return groups.map(([, g]) => {
+    const all = [g.parent, ...g.children].filter(Boolean);
+    const sent   = all.reduce((s,r) => s + r.sentCount, 0);
+    const read   = all.reduce((s,r) => s + r.readCount, 0);
+    const clicks = all.reduce((s,r) => s + r.uniqueClicks, 0);
+    const readRatio  = sent > 0 ? parseFloat((read   / sent * 100).toFixed(2)) : 0;
+    const clickRatio = sent > 0 ? parseFloat((clicks / sent * 100).toFixed(2)) : 0;
+    return { label: emailNum(all[0].name), sent, read, readRatio, clicks, clickRatio };
+  });
+}
+
+function cmpAvg(arr, key) {
+  const valid = arr.filter(r => r.sent > 0);
+  if (!valid.length) return 0;
+  return parseFloat((valid.reduce((s,r) => s + r[key], 0) / valid.length).toFixed(2));
+}
+function cmpSum(arr, key) { return arr.reduce((s,r) => s + r[key], 0); }
+
+function renderComparison(tab) {
+  const el = document.getElementById('comp-content');
+  if (tab === 'payroll')   el.innerHTML = buildPayrollComp();
+  else if (tab === 'plumpos') el.innerHTML = buildPlumComp();
+  else el.innerHTML = buildExecSummary();
+}
+
+function naCell(v, suffix='') {
+  if (v === null || v === undefined) return `<span class="cell-na">N/A</span>`;
+  return typeof v === 'number' ? v.toLocaleString() + suffix : v;
+}
+
+function winCell(aVal, bVal, aLbl, bLbl, aClass, bClass) {
+  if (aVal === null || bVal === null) return `<span class="winner-na">N/A</span>`;
+  if (aVal > bVal) return `<span class="${aClass}">${aLbl} ✓</span>`;
+  if (bVal > aVal) return `<span class="${bClass}">${bLbl} ✓</span>`;
+  return `<span class="winner-tie">Tie</span>`;
+}
+
+function buildPayrollComp() {
+  // Bombora = store.simple.payroll, ZoomInfo = store.zoominfo filtered for payroll
+  const bRows = filterByDate(store.simple['payroll'] || []);
+  const zRows = filterByDate(store.zoominfo.filter(r =>
+    JTBD_CONFIG.payroll.keywords.zoominfo.some(k => r.name.toLowerCase().includes(k))
+  ));
+  const bGroups = buildCompGroups(bRows);
+  const zGroups = buildCompGroups(zRows);
+
+  if (!bGroups.length && !zGroups.length)
+    return `<div class="no-data"><div class="no-data-icon">📊</div><h3>No data loaded</h3><p>Upload Payroll Contact JTBD and ZoomInfo Payroll files to see comparison.</p></div>`;
+
+  const allLabels = [...new Set([...bGroups.map(g=>g.label),...zGroups.map(g=>g.label)])].sort();
+  const bMap = Object.fromEntries(bGroups.map(g=>[g.label,g]));
+  const zMap = Object.fromEntries(zGroups.map(g=>[g.label,g]));
+
+  let rows = '';
+  allLabels.forEach(lbl => {
+    const b = bMap[lbl] || null, z = zMap[lbl] || null;
+    rows += `<tr>
+      <td class="email-col">${lbl}</td>
+      <td>${b ? b.sent.toLocaleString() : '<span class="cell-na">N/A</span>'}</td>
+      <td>${b ? b.read.toLocaleString() : '<span class="cell-na">N/A</span>'}</td>
+      <td>${b ? b.readRatio+'%' : '<span class="cell-na">N/A</span>'}</td>
+      <td>${b ? b.clicks.toLocaleString() : '<span class="cell-na">N/A</span>'}</td>
+      <td>${b ? b.clickRatio+'%' : '<span class="cell-na">N/A</span>'}</td>
+      <td>${b ? b.readRatio+'%' : '<span class="cell-na">N/A</span>'}</td>
+      <td>${z ? z.sent.toLocaleString() : '<span class="cell-na">N/A</span>'}</td>
+      <td>${z ? z.read.toLocaleString() : '<span class="cell-na">N/A</span>'}</td>
+      <td>${z ? z.readRatio+'%' : '<span class="cell-na">N/A</span>'}</td>
+      <td>${z ? z.clicks.toLocaleString() : '<span class="cell-na">N/A</span>'}</td>
+      <td>${z ? z.clickRatio+'%' : '<span class="cell-na">N/A</span>'}</td>
+      <td>${z ? z.readRatio+'%' : '<span class="cell-na">N/A</span>'}</td>
+      <td>${(b&&z) ? winCell(b.readRatio,z.readRatio,'Bombora','ZoomInfo','winner-bombora','winner-zoominfo') : '<span class="winner-na">N/A</span>'}</td>
+      <td>${(b&&z) ? winCell(b.clickRatio,z.clickRatio,'Bombora','ZoomInfo','winner-bombora','winner-zoominfo') : '<span class="winner-na">N/A</span>'}</td>
+    </tr>`;
+  });
+
+  const bAS = bGroups.length ? Math.round(cmpSum(bGroups,'sent')/bGroups.length) : 0;
+  const bAR = bGroups.length ? Math.round(cmpSum(bGroups,'read')/bGroups.length) : 0;
+  const bARR = cmpAvg(bGroups,'readRatio');
+  const bAC  = bGroups.length ? Math.round(cmpSum(bGroups,'clicks')/bGroups.length) : 0;
+  const bACR = cmpAvg(bGroups,'clickRatio');
+  const zAS  = zGroups.length ? Math.round(cmpSum(zGroups,'sent')/zGroups.length) : 0;
+  const zAR  = zGroups.length ? Math.round(cmpSum(zGroups,'read')/zGroups.length) : 0;
+  const zARR = cmpAvg(zGroups,'readRatio');
+  const zAC  = zGroups.length ? Math.round(cmpSum(zGroups,'clicks')/zGroups.length) : 0;
+  const zACR = cmpAvg(zGroups,'clickRatio');
+
+  return `
+    <div class="cmp-title">PAYROLL CAMPAIGN &nbsp;|&nbsp; <span>Bombora vs ZoomInfo</span> &nbsp;|&nbsp; Email-by-Email Performance</div>
+    <div class="cmp-wrap"><table class="cmp-table">
+      <thead>
+        <tr>
+          <th rowspan="2" style="background:var(--card2);color:var(--text2);min-width:80px;">Email #</th>
+          <th colspan="6" class="th-bombora">🔵 Bombora</th>
+          <th colspan="6" class="th-zoominfo">🟢 ZoomInfo</th>
+          <th colspan="2" class="th-winner">🏆 Winner</th>
+        </tr>
+        <tr>
+          <th class="th-sub">Sent</th><th class="th-sub">Read</th><th class="th-sub">Read Ratio</th>
+          <th class="th-sub">Clicks</th><th class="th-sub">Click Ratio</th><th class="th-sub">Avg Open Rate</th>
+          <th class="th-sub">Sent</th><th class="th-sub">Read</th><th class="th-sub">Read Ratio</th>
+          <th class="th-sub">Clicks</th><th class="th-sub">Click Ratio</th><th class="th-sub">Avg Open Rate</th>
+          <th class="th-sub">Open Rate</th><th class="th-sub">Click Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr class="avg-row">
+          <td class="email-col">AVERAGE</td>
+          <td>${bAS.toLocaleString()}</td><td>${bAR.toLocaleString()}</td><td>${bARR}%</td><td>${bAC.toLocaleString()}</td><td>${bACR}%</td><td>${bARR}%</td>
+          <td>${zAS.toLocaleString()}</td><td>${zAR.toLocaleString()}</td><td>${zARR}%</td><td>${zAC.toLocaleString()}</td><td>${zACR}%</td><td>${zARR}%</td>
+          <td>${winCell(bARR,zARR,'Bombora','ZoomInfo','winner-bombora','winner-zoominfo')}</td>
+          <td>${winCell(bACR,zACR,'Bombora','ZoomInfo','winner-bombora','winner-zoominfo')}</td>
+        </tr>
+      </tbody>
+    </table></div>`;
+}
+
+function buildPlumComp() {
+  const cRows = filterByDate(store.simple['plumpos_consideration'] || []);
+  const aRows = filterByDate(store.simple['plumpos_awareness']     || []);
+  const zRows = filterByDate(store.zoominfo.filter(r =>
+    JTBD_CONFIG.plumpos.keywords.zoominfo.some(k => r.name.toLowerCase().includes(k))
+  ));
+  const cGroups = buildCompGroups(cRows);
+  const aGroups = buildCompGroups(aRows);
+  const zGroups = buildCompGroups(zRows);
+
+  if (!cGroups.length && !aGroups.length && !zGroups.length)
+    return `<div class="no-data"><div class="no-data-icon">📊</div><h3>No data loaded</h3><p>Upload Plum POS Consideration, Awareness, and ZoomInfo files to see comparison.</p></div>`;
+
+  const allLabels = [...new Set([...cGroups.map(g=>g.label),...aGroups.map(g=>g.label),...zGroups.map(g=>g.label)])].sort();
+  const cMap = Object.fromEntries(cGroups.map(g=>[g.label,g]));
+  const aMap = Object.fromEntries(aGroups.map(g=>[g.label,g]));
+  const zMap = Object.fromEntries(zGroups.map(g=>[g.label,g]));
+
+  let rows = '';
+  allLabels.forEach(lbl => {
+    const c=cMap[lbl]||null, a=aMap[lbl]||null, z=zMap[lbl]||null;
+    const vals = [{v:c?.readRatio??null,n:'Bombora Consid.',cls:'winner-consid'},{v:a?.readRatio??null,n:'Bombora Aware.',cls:'winner-aware'},{v:z?.readRatio??null,n:'ZoomInfo',cls:'winner-zoominfo'}].filter(x=>x.v!==null);
+    let bestOpen = `<span class="winner-na">N/A</span>`;
+    if (vals.length) { const best=vals.reduce((a,b)=>b.v>a.v?b:a); bestOpen=`<span class="${best.cls}">${best.n} ✓</span>`; }
+    const gc = (g) => g
+      ? `<td>${g.sent.toLocaleString()}</td><td>${g.read.toLocaleString()}</td><td>${g.readRatio}%</td><td>${g.clicks.toLocaleString()}</td><td>${g.clickRatio}%</td><td>${g.readRatio}%</td>`
+      : `<td class="cell-na">N/A</td><td class="cell-na">N/A</td><td class="cell-na">N/A</td><td class="cell-na">N/A</td><td class="cell-na">N/A</td><td class="cell-na">N/A</td>`;
+    rows += `<tr><td class="email-col">${lbl}</td>${gc(c)}${gc(a)}${gc(z)}<td>${bestOpen}</td></tr>`;
+  });
+
+  const avgRow = (grps) => grps.length ? {
+    s:Math.round(cmpSum(grps,'sent')/grps.length),
+    r:Math.round(cmpSum(grps,'read')/grps.length),
+    rr:cmpAvg(grps,'readRatio'),
+    c:Math.round(cmpSum(grps,'clicks')/grps.length),
+    cr:cmpAvg(grps,'clickRatio')
+  } : null;
+  const cA=avgRow(cGroups), aA=avgRow(aGroups), zA=avgRow(zGroups);
+  const ac = (a) => a
+    ? `<td>${a.s.toLocaleString()}</td><td>${a.r.toLocaleString()}</td><td>${a.rr}%</td><td>${a.c.toLocaleString()}</td><td>${a.cr}%</td><td>${a.rr}%</td>`
+    : `<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>`;
+  const avgs=[{v:cA?.rr??-1,n:'Bombora Consid.',cls:'winner-consid'},{v:aA?.rr??-1,n:'Bombora Aware.',cls:'winner-aware'},{v:zA?.rr??-1,n:'ZoomInfo',cls:'winner-zoominfo'}].filter(x=>x.v>=0);
+  const bestAvg = avgs.length ? avgs.reduce((a,b)=>b.v>a.v?b:a) : null;
+
+  return `
+    <div class="cmp-title">PLUM POS CAMPAIGN &nbsp;|&nbsp; <span>Bombora vs ZoomInfo</span> &nbsp;|&nbsp; Email-by-Email Performance</div>
+    <div class="cmp-wrap"><table class="cmp-table">
+      <thead>
+        <tr>
+          <th rowspan="2" style="background:var(--card2);color:var(--text2);min-width:80px;">Email #</th>
+          <th colspan="6" class="th-consideration">🔵 Bombora — Plum Consideration</th>
+          <th colspan="6" class="th-awareness">🟢 Bombora — Plum Awareness</th>
+          <th colspan="6" class="th-zoominfo">🟢 ZoomInfo</th>
+          <th class="th-winner">🏆 Open Rate Winner</th>
+        </tr>
+        <tr>
+          <th class="th-sub">Sent</th><th class="th-sub">Read</th><th class="th-sub">Read Ratio</th><th class="th-sub">Clicks</th><th class="th-sub">Click Rate</th><th class="th-sub">Avg Open Rate</th>
+          <th class="th-sub">Sent</th><th class="th-sub">Read</th><th class="th-sub">Read Ratio</th><th class="th-sub">Clicks</th><th class="th-sub">Click Rate</th><th class="th-sub">Avg Open Rate</th>
+          <th class="th-sub">Sent</th><th class="th-sub">Read</th><th class="th-sub">Read Ratio</th><th class="th-sub">Clicks</th><th class="th-sub">Click Rate</th><th class="th-sub">Avg Open Rate</th>
+          <th class="th-sub">Winner</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr class="avg-row">
+          <td class="email-col">AVERAGE</td>${ac(cA)}${ac(aA)}${ac(zA)}
+          <td>${bestAvg ? `<span class="${bestAvg.cls}">${bestAvg.n} ✓</span>` : '—'}</td>
+        </tr>
+      </tbody>
+    </table></div>`;
+}
+
+function buildExecSummary() {
+  const campaigns = [
+    { name:'Payroll',  bRows: store.simple['payroll']||[], ziKws: JTBD_CONFIG.payroll.keywords.zoominfo },
+    { name:'Plum POS', bRows: [...(store.simple['plumpos_consideration']||[]),...(store.simple['plumpos_awareness']||[])], ziKws: JTBD_CONFIG.plumpos.keywords.zoominfo }
+  ];
+  const hasAny = campaigns.some(c => c.bRows.length > 0 || store.zoominfo.some(r => c.ziKws.some(k=>r.name.toLowerCase().includes(k))));
+  if (!hasAny) return `<div class="no-data"><div class="no-data-icon">📋</div><h3>No data loaded</h3><p>Upload Contact JTBD and ZoomInfo files to see Executive Summary.</p></div>`;
+
+  let rows = '';
+  campaigns.forEach(c => {
+    const bGrps = buildCompGroups(filterByDate(c.bRows));
+    const zGrps = buildCompGroups(filterByDate(store.zoominfo.filter(r => c.ziKws.some(k=>r.name.toLowerCase().includes(k)))));
+    const bV = bGrps.filter(g=>g.sent>0), zV = zGrps.filter(g=>g.sent>0);
+    const bES=bV.length, bLS=bV.length?Math.round(cmpSum(bV,'sent')/bV.length):0;
+    const bOR=cmpAvg(bV,'readRatio'), bCR=cmpAvg(bV,'clickRatio');
+    const bAO=bV.length?Math.round(cmpSum(bV,'read')/bV.length):0, bAC=bV.length?Math.round(cmpSum(bV,'clicks')/bV.length):0;
+    const zES=zV.length, zLS=zV.length?Math.round(cmpSum(zV,'sent')/zV.length):0;
+    const zOR=cmpAvg(zV,'readRatio'), zCR=cmpAvg(zV,'clickRatio');
+    const zAO=zV.length?Math.round(cmpSum(zV,'read')/zV.length):0, zAC=zV.length?Math.round(cmpSum(zV,'clicks')/zV.length):0;
+    rows += `
+      <tr>
+        <td rowspan="2">${c.name}</td>
+        <td><span class="plat-bombora">Bombora</span></td>
+        <td>${bES}</td><td>${bLS.toLocaleString()}</td>
+        <td class="${bOR>=zOR?'winner-cell':''}">${bOR}%</td>
+        <td class="${bCR>=zCR?'winner-cell':''}">${bCR}%</td>
+        <td class="${bAO>=zAO?'winner-cell':''}">${bAO.toLocaleString()}</td>
+        <td class="${bAC>=zAC?'winner-cell':''}">${bAC.toLocaleString()}</td>
+      </tr>
+      <tr>
+        <td><span class="plat-zoominfo">ZoomInfo</span></td>
+        <td>${zES}</td><td>${zLS.toLocaleString()}</td>
+        <td class="${zOR>=bOR?'winner-cell':''}">${zOR}%</td>
+        <td class="${zCR>=bCR?'winner-cell':''}">${zCR}%</td>
+        <td class="${zAO>=bAO?'winner-cell':''}">${zAO.toLocaleString()}</td>
+        <td class="${zAC>=bAC?'winner-cell':''}">${zAC.toLocaleString()}</td>
+      </tr>`;
+  });
+
+  return `
+    <div class="cmp-title">EXECUTIVE SUMMARY &nbsp;|&nbsp; <span>Bombora vs ZoomInfo</span> Email Performance</div>
+    <p style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:16px;font-style:italic;">Avg metrics across all emails sent (variants averaged). Green = winner per metric.</p>
+    <div class="exec-wrap"><table class="exec-table">
+      <thead><tr><th>Campaign</th><th>Platform</th><th>Emails Sent</th><th>Avg List Size</th><th>Avg Open Rate</th><th>Avg Click Rate</th><th>Avg Opens</th><th>Avg Clicks</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+// INIT
+renderOvSummary(); renderJTBDGrid();
+renderCampTable(currentOvTab,'ov-camp-wrap','uniqueClicks',false);
+</script>
+</body>
+</html>
