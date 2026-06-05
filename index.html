@@ -713,9 +713,7 @@ function detectFileType(filename, headers) {
 function handleSmartUpload(input) {
   const files = Array.from(input.files);
   if (!files.length) return;
-  store.zoominfo = [];
-  Object.keys(store.simple).forEach(k => store.simple[k] = []);
-  Object.keys(store.campaign).forEach(k => store.campaign[k] = []);
+  // Do NOT wipe entire store — only clear what gets re-uploaded below
   let totalFiles = files.length;
   const summary = { zoominfo: 0, campaign: {}, simple: {} };
   function processNext(idx) {
@@ -754,6 +752,29 @@ function handleSmartUpload(input) {
         // Detect Plum POS sub-type from filename
         const isConsideration = fn.includes('consideration');
         const isAwareness     = fn.includes('awareness') || fn.includes('plum-pos-awareness') || fn.includes('pos-awareness');
+
+        // Determine which JTBDs this file touches, then clear only those
+        if (isConsideration) {
+          store.simple['plumpos_consideration'] = [];
+        } else if (isAwareness) {
+          store.simple['plumpos_awareness'] = [];
+        } else {
+          // Pre-scan rows to find which JTBDs will be updated, clear only those
+          const jtbdsToReset = new Set();
+          rows.forEach(r => {
+            const n = r.name.toLowerCase();
+            for (const [jtbd, cfg] of Object.entries(JTBD_CONFIG)) {
+              if (jtbd === 'plumpos') continue;
+              const newKws = cfg.keywords['new'] || [];
+              const ziKws  = cfg.keywords['zoominfo'] || [];
+              if (newKws.some(k => n.includes(k)) && !ziKws.some(k => n.includes(k))) {
+                jtbdsToReset.add(jtbd);
+                break;
+              }
+            }
+          });
+          jtbdsToReset.forEach(jtbd => { store.simple[jtbd] = []; });
+        }
 
         rows.forEach(r => {
           const n = r.name.toLowerCase();
