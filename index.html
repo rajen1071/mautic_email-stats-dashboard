@@ -23,9 +23,11 @@
 
   /* SIDEBAR */
   .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;overflow-y:auto;}
-  .sidebar-logo{padding:24px 20px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  /* .sidebar-logo{padding:24px 20px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
   .sidebar-logo .logo-tag{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:4px;}
-  .sidebar-logo h2{font-size:18px;font-weight:700;color:var(--text);line-height:1.2;}
+  .sidebar-logo h2{font-size:18px;font-weight:700;color:var(--text);line-height:1.2;} */
+  .sidebar-logo {padding:24px 20px 20px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:center;align-items:center;}
+  .sidebar-logo img {width:180px;height:auto;display:block;}
   .sidebar-section{padding:16px 12px 8px;flex-shrink:0;}
   .sidebar-section-title{font-size:10px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase;padding:0 8px;margin-bottom:8px;}
   .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;transition:all 0.2s;font-size:14px;font-weight:500;color:var(--text2);user-select:none;}
@@ -267,9 +269,12 @@
 </div>
 
 <div class="sidebar">
-  <div class="sidebar-logo">
+  <!-- <div class="sidebar-logo">
     <div class="logo-tag">Campaign Analytics</div>
     <h2>Mautic<br>Dashboard</h2>
+  </div> -->
+  <div class="sidebar-logo">
+    <img src="https://mautic.org/wp-content/uploads/2025/01/Mautic_Logo_With_Tagline_RGB_DB.png" alt="Mautic Logo">
   </div>
 
   <div class="sidebar-section">
@@ -607,6 +612,7 @@ function normalizeCampRow(r) {
   const topicName = m ? m[1].trim() : campName;
   const row = {
     campaignName: campName,
+    campaignId: (r['campaign_id'] || r['id'] || '').toString().trim(),
     topicName,
     totalSent:   parseNum(r['total_sent']   || r['sent count'] || r['sent_count']),
     uniqueReads: parseNum(r['unique_read_count'] || r['unique read count'] || r['read count']),
@@ -620,6 +626,132 @@ function normalizeCampRow(r) {
 
 function parseNum(v){ return parseInt((v||'0').toString().replace(/,/g,''))||0; }
 function parsePct(v){ return parseFloat((v||'0').toString().replace('%',''))||0; }
+
+// ─── RAW PER-CONTACT CAMPAIGN CSV → AGGREGATED CAMPAIGN ROWS ───
+// New export format: one row per (campaign, contact) with columns:
+// Campaign, Campaign ID, Name, Contact Contact Primary Email, Sent count, Read, Unique clicks, Date sent
+// We group by Campaign ID and compute:
+//   totalSent    = number of send rows for that campaign
+//   uniqueReads  = distinct contact emails with Read = Yes
+//   uniqueClicks = distinct contact emails with Unique clicks > 0
+function aggregateRawCampaignRows(rawRows) {
+  const groups = {}; // campaignId -> { name, sentCount, readEmails:Set, clickEmails:Set }
+  const order = [];
+  rawRows.forEach(r => {
+    const cid = (r['campaign id'] || r['campaign_id'] || '').toString().trim();
+    if (!cid) return;
+    const cname = (r['campaign'] || r['campaign_name'] || '').toString().trim();
+    const email = (r['contact contact primary email'] || r['contact primary email'] || '').toString().trim().toLowerCase();
+    const isRead = (r['read'] || '').toString().trim().toLowerCase() === 'yes';
+    const clicks = parseNum(r['unique clicks'] || r['unique_clicks']);
+
+    if (!groups[cid]) {
+      groups[cid] = { name: cname, sentCount: 0, readEmails: new Set(), clickEmails: new Set() };
+      order.push(cid);
+    }
+    const g = groups[cid];
+    g.sentCount++;
+    if (email && isRead) g.readEmails.add(email);
+    if (email && clicks > 0) g.clickEmails.add(email);
+  });
+
+  return order.map(cid => {
+    const g = groups[cid];
+    const campName = g.name;
+    const m = campName.match(/=\s*(.+?)\s*\|\s*Email/i);
+    const topicName = m ? m[1].trim() : campName;
+    const totalSent = g.sentCount;
+    const uniqueReads = g.readEmails.size;
+    const uniqueClicks = g.clickEmails.size;
+    return {
+      campaignName: campName,
+      campaignId: cid,
+      topicName,
+      totalSent,
+      uniqueReads,
+      uniqueClicks,
+      sendDate: '',
+      openRate: totalSent > 0 ? parseFloat((uniqueReads  / totalSent * 100).toFixed(1)) : 0,
+      clickPct: totalSent > 0 ? parseFloat((uniqueClicks / totalSent * 100).toFixed(1)) : 0
+    };
+  });
+}
+
+// Detects whether a parsed header set belongs to the new raw per-contact campaign export
+function isRawCampaignHeaders(hSet) {
+  return (hSet.has('campaign id') || hSet.has('campaign_id'))
+    && (hSet.has('contact contact primary email') || hSet.has('contact primary email'))
+    && hSet.has('read');
+}
+
+// ─── MASTER CAMPAIGN LISTS ───
+// Full set of known campaign topics per JTBD (id -> full campaign name).
+// Used so that topics with ZERO activity in the uploaded file (or topics that
+// never appear at all in a given upload) still show up in the dashboard with 0s,
+// instead of silently disappearing.
+const MASTER_CAMPAIGNS = {
+  music: {
+    '484': '25207 Bombora | Intent Analytics = Apple Music for Business | Email |Music',
+    '485': '25207 Bombora | Intent Analytics = Bar Music System | Email |Music',
+    '486': '25207 Bombora | Intent Analytics = Background Music for Hotel | Email |Music',
+    '487': '25207 Bombora | Intent Analytics = In-Store Music | Email |Music',
+    '488': '25207 Bombora | Intent Analytics = Stingray | Email |Music',
+    '489': '25207 Bombora | Intent Analytics = Rockbot | Email |Music',
+    '490': '25207 Bombora | Intent Analytics = Pandora for Business | Email |Music',
+    '491': '25207 Bombora | Intent Analytics = Spotify Business | Email |Music',
+    '492': '25207 Bombora | Intent Analytics = PlayNetwork | Email |Music',
+    '493': '25207 Bombora | Intent Analytics = Music for Restaurants| Email |Music',
+    '494': '25207 Bombora | Intent Analytics = Music for Coffee Shops | Email |Music',
+    '495': '25207 Bombora | Intent Analytics = Background Music for Business | Email |Music'
+  },
+  payroll: {
+    '496': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Payroll | Email | Payroll',
+    '497': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Payroll Management | Email | Payroll',
+    '498': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Payroll Software | Email | Payroll',
+    '499': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Automated Payroll | Email | Payroll',
+    '500': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Paychecks | Email | Payroll',
+    '501': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Paychex | Email | Payroll',
+    '502': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Paycor | Email | Payroll',
+    '503': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Payroll Management Software | Email | Payroll',
+    '504': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = Payroll Services | Email | Payroll',
+    '505': '25207 Bombora - ZoomInfo | Buying Intent - Intent Topics = QuickBooks | Email | Payroll'
+  },
+  plumpos: {
+    '509': '25201 Bombora - ZoomInfo | Buying Intent - Intent Topics = Clover | Email | Plum',
+    '510': '25201 Bombora - ZoomInfo | Buying Intent - Intent Topics = Kiosks | Email | Plum',
+    '511': '25201 Bombora - ZoomInfo | Buying Intent - Intent Topics = Mobile Point of Sale (mPOS) | Email | Plum',
+    '512': '25201 Bombora - ZoomInfo | Buying Intent - Intent Topics = Payment Terminal | Email | Plum',
+    '513': '25201 Bombora - ZoomInfo | Buying Intent - Intent Topics = Point of Purchase Displays | Email | Plum',
+    '514': '25201 Bombora - ZoomInfo | Buying Intent - Intent Topics = Point of Sale (POS) System | Email | Plum',
+    '515': '25201 Bombora - ZoomInfo | Buying Intent - Intent Topics = Square | Email | Plum'
+  }
+};
+
+// Builds a normalizeCampRow-shaped row with all zeros for a master-list entry
+function zeroCampRow(campaignName) {
+  const m = campaignName.match(/=\s*(.+?)\s*\|\s*Email/i);
+  const topicName = m ? m[1].trim() : campaignName;
+  return { campaignName, topicName, totalSent: 0, uniqueReads: 0, uniqueClicks: 0, sendDate: '', openRate: 0, clickPct: 0 };
+}
+
+// Merges aggregated/uploaded campaign rows with the master list for that JTBD,
+// so missing/zero-activity topics still appear in the dashboard.
+function mergeWithMasterList(jtbd, rows) {
+  const master = MASTER_CAMPAIGNS[jtbd];
+  if (!master) return rows; // no master list for this JTBD — return as-is
+
+  const usedIds = new Set(rows.map(r => r.campaignId).filter(Boolean));
+  const usedNames = new Set(rows.map(r => r.campaignName));
+  const merged = rows.slice();
+  Object.entries(master).forEach(([cid, name]) => {
+    if (usedIds.has(cid)) return;       // matched by id
+    if (!usedIds.size && usedNames.has(name)) return; // fallback: matched by exact name (no ids at all in upload)
+    const zr = zeroCampRow(name);
+    zr.campaignId = cid;
+    merged.push(zr);
+  });
+  return merged;
+}
 
 // ─── FILE → ROWS PARSER (CSV + XLSX) ───
 function parseFileToRows(file, callback) {
@@ -694,12 +826,14 @@ function detectFileType(filename, headers) {
   // ── FILENAME patterns first (strongest signal) ──
   if (fn.includes('zoominfo-email-sent-report') || fn.includes('zoominfo_email_sent_report')) return 'zoominfo';
   if (fn.includes('query_output') || fn.includes('query-output') || fn.includes('queryoutput')) return 'campaign';
+  if (fn.includes('campaign-email-statistics') || fn.includes('campaign_email_statistics')) return 'campaign_raw';
   // All variant reports and JTBD email reports = simple (Contact JTBD)
   if (fn.includes('variant-report') || fn.includes('variant_report')) return 'simple';
   if (fn.includes('jtbd-email-sent-report') || fn.includes('jtbd_email_sent_report')) return 'simple';
   if (fn.includes('email-sent-report') || fn.includes('email_sent_report')) return 'simple';
 
   // ── HEADER signals (fallback) ──
+  if (isRawCampaignHeaders(hSet)) return 'campaign_raw';
   if (hSet.has('campaign_id') || hSet.has('campaign_name')) return 'campaign';
   if ((hSet.has('unique clicks ratio') || hSet.has('unique_clicks_ratio')) && hSet.has('sent date')) {
     return fn.includes('zoominfo') ? 'zoominfo' : 'simple';
@@ -716,8 +850,13 @@ function handleSmartUpload(input) {
   // Do NOT wipe entire store — only clear what gets re-uploaded below
   let totalFiles = files.length;
   const summary = { zoominfo: 0, campaign: {}, simple: {} };
+  const campaignJtbdsReset = new Set(); // ensures each JTBD's campaign bucket is cleared once per upload batch, not accumulated
   function processNext(idx) {
     if (idx >= files.length) {
+      // Fill in zero-activity topics from the master list for any JTBD that got campaign data
+      Object.keys(summary.campaign).forEach(jtbd => {
+        store.campaign[jtbd] = mergeWithMasterList(jtbd, store.campaign[jtbd]);
+      });
       let lines = [];
       if (summary.zoominfo) lines.push(`🔵 <b>ZoomInfo</b>: ${summary.zoominfo} rows`);
       Object.entries(summary.campaign).forEach(([j,c]) => lines.push(`📊 <b>${JTBD_CONFIG[j]?.label||j} Campaign</b>: ${c} topics`));
@@ -739,9 +878,13 @@ function handleSmartUpload(input) {
         const rows = rawRows.map(normalizeRow);
         store.zoominfo = store.zoominfo.concat(rows);
         summary.zoominfo += rows.length;
-      } else if (ftype === 'campaign') {
-        const raw = rawRows.map(normalizeCampRow);
+      } else if (ftype === 'campaign' || ftype === 'campaign_raw') {
+        const raw = ftype === 'campaign_raw' ? aggregateRawCampaignRows(rawRows) : rawRows.map(normalizeCampRow);
         const detected = detectCampaignJTBD(raw);
+        if (!campaignJtbdsReset.has(detected)) {
+          store.campaign[detected] = [];
+          campaignJtbdsReset.add(detected);
+        }
         store.campaign[detected] = store.campaign[detected].concat(raw);
         summary.campaign[detected] = (summary.campaign[detected] || 0) + raw.length;
       } else {
@@ -899,6 +1042,10 @@ function handleCampaignMultiUpload(input) {
 
   function processNext(idx) {
     if (idx >= files.length) {
+      // Fill in zero-activity topics from the master list for any JTBD that got campaign data
+      Object.keys(summary).forEach(jtbd => {
+        store.campaign[jtbd] = mergeWithMasterList(jtbd, store.campaign[jtbd]);
+      });
       const detectedLabels = Object.entries(summary)
         .map(([j,{label,count}]) => `${JTBD_CONFIG[j].icon} <b>${label}</b>: ${count} topics`)
         .join('<br>');
@@ -910,7 +1057,11 @@ function handleCampaignMultiUpload(input) {
     }
     const file = files[idx];
     parseFileToRows(file, rawRows => {
-      const raw = rawRows.map(normalizeCampRow);
+      if (!rawRows.length) { processNext(idx + 1); return; }
+      const headers = new Set(Object.keys(rawRows[0]).map(h => h.toLowerCase().trim()));
+      const fn = file.name.toLowerCase();
+      const isRaw = isRawCampaignHeaders(headers) || fn.includes('campaign-email-statistics') || fn.includes('campaign_email_statistics');
+      const raw = isRaw ? aggregateRawCampaignRows(rawRows) : rawRows.map(normalizeCampRow);
       if (!raw.length) { processNext(idx + 1); return; }
       totalRows += raw.length;
       const detected = detectCampaignJTBD(raw);
